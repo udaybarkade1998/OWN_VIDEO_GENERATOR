@@ -137,9 +137,16 @@ def target_path(m):
 
 
 def have(m):
+    """True only for a complete file under its final name."""
     p = target_path(m)
-    # accept only a fully-sized file; a partial one is not "present"
     return p.exists() and p.stat().st_size == m["size"]
+
+
+def partial_bytes(m):
+    """Bytes already fetched into a leftover .part from an interrupted run."""
+    p = target_path(m)
+    part = p.with_suffix(p.suffix + ".part")
+    return part.stat().st_size if part.exists() else 0
 
 
 def _range_worker(url, path, start, end, key, lock):
@@ -159,14 +166,17 @@ def _range_worker(url, path, start, end, key, lock):
 def download_one(m):
     key, url, total = m["key"], m["url"], m["size"]
     path = target_path(m)
+    part = path.with_suffix(path.suffix + ".part")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with LOCK:
         STATE["current"] = key
         STATE["files"][key] = {"got": 0, "total": total, "speed": 0}
 
-    # preallocate so workers can seek and write in place
-    with open(path, "wb") as f:
+    # Preallocate so the range workers can seek and write in place. This happens
+    # on the .part file, never the real name, so a half-written model can never
+    # be mistaken for a complete one.
+    with open(part, "wb") as f:
         f.truncate(total)
 
     span = total // CONNECTIONS
@@ -176,7 +186,7 @@ def download_one(m):
         a = i * span
         b = (total - 1) if i == CONNECTIONS - 1 else (a + span - 1)
         t = threading.Thread(target=_range_worker,
-                             args=(url, path, a, b, key, lock), daemon=True)
+                             args=(url, part, a, b, key, lock), daemon=True)
         t.start()
         threads.append(t)
 
@@ -192,9 +202,12 @@ def download_one(m):
     for t in threads:
         t.join()
 
-    got = path.stat().st_size
-    if got != total:
-        raise IOError(f"{m['name']}: got {got} bytes, expected {total}")
+    got = part.stat().st_size
+    downloaded = STATE["files"][key]["got"]
+    if got != total or downloaded < total:
+        part.unlink(missing_ok=True)
+        raise IOError(f"{m['name']}: wrote {downloaded} of {total} bytes - incomplete")
+    part.replace(path)                      # atomic: only now does it "exist"
     with LOCK:
         STATE["files"][key]["got"] = total
         STATE["done_keys"].append(key)
@@ -251,7 +264,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 models.append({
                     "key": m["key"], "name": m["name"], "what": m["what"],
                     "size": m["size"], "have": have(m),
-                    "partial": p.exists() and p.stat().st_size != m["size"],
+                    "partial": partial_bytes(m) > 0,
                     "dir": str(p.parent),
                 })
             with LOCK:
