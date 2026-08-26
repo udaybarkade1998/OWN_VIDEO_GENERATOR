@@ -20,6 +20,7 @@ import socketserver
 import threading
 import time
 import platform
+import struct
 import urllib.request
 from pathlib import Path
 
@@ -82,7 +83,7 @@ IMAGE_MODELS = [
         "key": "sdxl",
         "name": "sd_xl_base_1.0.safetensors",
         "subdir": "checkpoints",
-        "size": 6938040706,
+        "size": 6938078334,
         "what": "SDXL base 1.0 - image model (includes its text encoders)",
         "url": f"{HF}/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/"
                "sd_xl_base_1.0.safetensors",
@@ -136,10 +137,49 @@ def target_path(m):
     return Path(COMFY_ROOT) / "models" / m["subdir"] / m["name"]
 
 
+def remote_size(url):
+    """Ask the server how big the file really is. Never trust a hardcoded size:
+    getting it wrong by even a few bytes truncates the download silently."""
+    req = urllib.request.Request(url, method="HEAD")
+    with urllib.request.urlopen(req, timeout=30) as r:
+        n = r.headers.get("X-Linked-Size") or r.headers.get("Content-Length")
+        return int(n)
+
+
+def safetensors_ok(path):
+    """Parse the header and confirm every tensor actually fits in the file.
+    Catches truncation that a size comparison cannot."""
+    try:
+        size = path.stat().st_size
+        with open(path, "rb") as f:
+            n = struct.unpack("<Q", f.read(8))[0]
+            if not (0 < n < size):
+                return False
+            head = json.loads(f.read(n))
+        end = max(v["data_offsets"][1] for k, v in head.items() if k != "__metadata__")
+        return 8 + n + end == size
+    except Exception:
+        return False
+
+
+def gguf_ok(path):
+    try:
+        with open(path, "rb") as f:
+            return f.read(4) == b"GGUF"
+    except Exception:
+        return False
+
+
 def have(m):
-    """True only for a complete file under its final name."""
+    """Complete and structurally valid under its final name."""
     p = target_path(m)
-    return p.exists() and p.stat().st_size == m["size"]
+    if not p.exists() or p.stat().st_size == 0:
+        return False
+    if p.suffix == ".safetensors":
+        return safetensors_ok(p)
+    if p.suffix == ".gguf":
+        return gguf_ok(p) and p.stat().st_size == m["size"]
+    return p.stat().st_size == m["size"]
 
 
 def partial_bytes(m):
@@ -164,7 +204,11 @@ def _range_worker(url, path, start, end, key, lock):
 
 
 def download_one(m):
-    key, url, total = m["key"], m["url"], m["size"]
+    key, url = m["key"], m["url"]
+    try:
+        total = remote_size(url)              # authoritative
+    except Exception:
+        total = m["size"]                     # fall back to the listed estimate
     path = target_path(m)
     part = path.with_suffix(path.suffix + ".part")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -207,6 +251,10 @@ def download_one(m):
     if got != total or downloaded < total:
         part.unlink(missing_ok=True)
         raise IOError(f"{m['name']}: wrote {downloaded} of {total} bytes - incomplete")
+    if part.suffix == ".part" and path.suffix == ".safetensors" and not safetensors_ok(part):
+        part.unlink(missing_ok=True)
+        raise IOError(f"{m['name']}: downloaded but the safetensors header does not "
+                      f"match the file - treating as corrupt")
     part.replace(path)                      # atomic: only now does it "exist"
     with LOCK:
         STATE["files"][key]["got"] = total
