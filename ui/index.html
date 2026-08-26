@@ -1113,7 +1113,9 @@ $("btnStart").onclick=()=>{
   queue=[];finished=[];doneCount=0;stopAfter=false;
   ls.forEach(p=>{for(let v=0;v<c.vars;v++)
     queue.push({prompt:p,w:c.w,h:c.h,frames:c.frames,steps:c.steps,
-      image:srcImage?((srcImage.subfolder?srcImage.subfolder+"/":"")+srcImage.filename):null,
+      // LoadImageOutput wants ComfyUI's annotated form: "name.png [output]"
+      image:srcImage?((srcImage.subfolder?srcImage.subfolder+"/":"")
+                      +srcImage.filename+" [output]"):null,
       seed:Math.floor(Math.random()*2**31)});});
   $("log").innerHTML=""; $("stDone").textContent="0";
   $("stPer").textContent="—"; $("stStep").textContent="—";

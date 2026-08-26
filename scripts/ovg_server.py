@@ -454,6 +454,18 @@ def main():
     print(f"UI          : http://127.0.0.1:{args.port}")
     print(f"ComfyUI root: {COMFY_ROOT}")
     print(f"Clips saved : {COMFY_ROOT / 'output'}")
+    # A .part left by an interrupted run cannot be resumed - the completed byte
+    # ranges are not tracked - so clear them rather than leave a full-size file
+    # that looks like a real download in progress.
+    stale = list((COMFY_ROOT / "models").rglob("*.part"))
+    for f in stale:
+        try:
+            print(f"Removing stale partial download: {f.name} "
+                  f"({f.stat().st_size/1e9:.2f} GB)")
+            f.unlink()
+        except OSError:
+            pass
+
     for mode, ms in MODEL_SETS.items():
         ok = sum(1 for m in ms if have(m))
         tot_gb = sum(m["size"] for m in ms) / 1e9

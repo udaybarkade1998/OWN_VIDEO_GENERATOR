@@ -57,7 +57,7 @@
   "20": {
     "class_type": "LoadImageOutput",
     "inputs": {
-      "image": "image_00001_.png"
+      "image": "image_00001_.png [output]"
     }
   },
   "21": {
