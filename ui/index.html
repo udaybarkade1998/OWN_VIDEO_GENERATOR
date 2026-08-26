@@ -136,6 +136,12 @@
     border-radius:99px;background:var(--bg);color:var(--dim)}
   .mode .tag.ready{background:rgba(62,224,143,.15);color:var(--accent2)}
   .mode .tag.need{background:rgba(255,176,32,.15);color:var(--warn)}
+  .mode.soon{opacity:.6;cursor:default}
+  .mode.soon:hover{border-color:var(--line);background:var(--panel2);transform:none}
+  .mode .tag.soon{background:rgba(139,148,167,.16);color:var(--dim)}
+  .mode .sz2{font-size:11.5px;color:var(--dim);margin-top:8px}
+  .sect{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;
+    margin:26px 0 12px;font-weight:600}
   .stages{margin:16px 0 4px}
   .sg{display:flex;align-items:center;gap:11px;padding:8px 11px;border-radius:8px;
     font-size:13.5px;color:var(--dim);transition:.2s}
@@ -180,24 +186,12 @@
   <section id="scHome">
     <div class="card">
       <h2>What do you want to make?</h2>
-      <div class="modes">
-        <div class="mode" data-pick="video">
-          <div class="big">🎬</div>
-          <h3>Video</h3>
-          <p>2-second 9:16 clips with real motion. Wan 2.1 1.3B at 432×768.
-             Roughly 5 minutes per clip on this PC.</p>
-          <span class="tag" id="tagVideo">checking…</span>
-        </div>
-        <div class="mode" data-pick="image">
-          <div class="big">🖼️</div>
-          <h3>Image</h3>
-          <p>Still 9:16 images at 720×1280. SDXL with a 4-step Lightning LoRA.
-             Far faster than video — well under a minute each.</p>
-          <span class="tag" id="tagImage">checking…</span>
-        </div>
-      </div>
-      <p class="hint">Each mode downloads its own models the first time you pick it.
-        Video needs 7.3 GB, images 7.7 GB — you only need the one you use.</p>
+      <div class="modes" id="modeGrid"></div>
+      <div class="sect">Planned</div>
+      <div class="modes" id="soonGrid"></div>
+      <p class="hint">Each mode downloads only its own models, the first time you use it.
+        Planned modes are ordered by what they add for the work involved &mdash; every one
+        listed has been checked against real file sizes to fit in 4&nbsp;GB.</p>
     </div>
   </section>
 
@@ -571,7 +565,62 @@ function human(b){const u=["B","KB","MB","GB"];let i=0;
   while(b>=1024&&i<3){b/=1024;i++;} return b.toFixed(i>=2?1:0)+" "+u[i];}
 
 // ---------- state ----------
-let MODE="video";           // "video" | "image"
+let MODE="video";
+
+// Everything the app does, or will. "soon" entries render as disabled cards so
+// the roadmap lives in the product. Sizes were checked on HuggingFace, not guessed.
+const ARROW="&#8594;";
+const MODES=[
+ {id:"video", icon:"&#127916;", name:"Text "+ARROW+" Video", status:"ready",
+  desc:"2-second 9:16 clips with real motion. Wan 2.1 1.3B at 432&times;768. "
+      +"About 5 minutes per clip on this PC."},
+ {id:"image", icon:"&#128444;", name:"Text "+ARROW+" Image", status:"ready",
+  desc:"Stills at SDXL's native 832&times;1216, cropped to 9:16 for Shorts. "
+      +"Under a minute each."},
+
+ {id:"i2v", icon:"&#127902;", name:"Image "+ARROW+" Video", status:"soon",
+  size:"4.4 GB", model:"Wan 2.1 Fun InP 1.3B + CLIP-Vision H",
+  desc:"Animate a still you already like, instead of hoping Wan draws it well at "
+      +"432px. The biggest quality win left."},
+ {id:"upscale", icon:"&#128269;", name:"Upscale", status:"soon",
+  size:"70 MB", model:"Real-ESRGAN x4plus",
+  desc:"A detail-aware upscaler for the 1080&times;1920 step, replacing the plain "
+      +"Lanczos resize used now."},
+ {id:"img2img", icon:"&#127912;", name:"Image "+ARROW+" Image", status:"soon",
+  size:"none", model:"reuses SDXL",
+  desc:"Restyle or make variations of an image you already have. No extra download."},
+ {id:"rmbg", icon:"&#9986;", name:"Remove background", status:"soon",
+  size:"180 MB", model:"RMBG-1.4",
+  desc:"Cut the subject out for overlays, thumbnails and title cards."},
+ {id:"tts", icon:"&#128483;", name:"Voiceover", status:"soon",
+  size:"330 MB", model:"Kokoro-82M",
+  desc:"Narration for Shorts. Runs on the CPU, so it costs no VRAM and can render "
+      +"while the GPU is busy on a clip."},
+ {id:"v2v", icon:"&#127899;", name:"Video "+ARROW+" Video", status:"soon",
+  size:"3.1 GB", model:"Wan 2.1 VACE 1.3B",
+  desc:"Restyle footage you already have, or drive motion from a reference clip."},
+];
+function renderModes(ready){
+  const card=m=>{
+    if(m.status==="ready"){
+      const r=ready?ready[m.id]:undefined;
+      const tag=r===undefined?'<span class="tag">checking&hellip;</span>'
+        :(r?'<span class="tag ready">models ready</span>'
+            :'<span class="tag need">needs download</span>');
+      return `<div class="mode" data-pick="${m.id}"><div class="big">${m.icon}</div>
+        <h3>${m.name}</h3><p>${m.desc}</p>${tag}</div>`;
+    }
+    return `<div class="mode soon"><div class="big">${m.icon}</div>
+      <h3>${m.name}</h3><p>${m.desc}</p>
+      <div class="sz2">${m.model} &middot; ${m.size==="none"?"no extra download":m.size}</div>
+      <span class="tag soon">coming soon</span></div>`;
+  };
+  const g=$("modeGrid"), sg=$("soonGrid");
+  if(g)  g.innerHTML =MODES.filter(m=>m.status==="ready").map(card).join("");
+  if(sg) sg.innerHTML=MODES.filter(m=>m.status==="soon").map(card).join("");
+  document.querySelectorAll("[data-pick]").forEach(el=>
+    el.onclick=()=>pickMode(el.dataset.pick));
+}
 let mode="text", queue=[], qi=-1, running=false, stopAfter=false;
 let curPromptId=null, clipStart=0, batchStart=0, sampStart=0, secPerStep=0, doneCount=0;
 let curSteps=0, curTokensM=0, lastPhaseNode=null, finished=[], outputDir="";
@@ -593,14 +642,7 @@ async function pollHelper(){
     const d=await (await fetch(`/api/status?mode=${MODE}`,{cache:"no-store"})).json();
     $("dotHelper").className="dot ok"; $("helperTxt").textContent="helper ready";
     outputDir=d.output_dir; $("outPath").textContent=d.output_dir;
-    if(d.ready){
-      for(const k of ["video","image"]){
-        const el=$("tag"+k[0].toUpperCase()+k.slice(1)); if(!el)continue;
-        el.className="tag "+(d.ready[k]?"ready":"need");
-        el.textContent=d.ready[k]?"models ready"
-          :`needs ${human(d.sizes[k])} download`;
-      }
-    }
+    if(d.ready) renderModes(d.ready);
     renderModels(d);
     if(d.download&&(d.download.active||d.download.error)) renderDownload(d);
     if(d.all_present&&!$("scSetup").classList.contains("hidden")){
@@ -942,8 +984,6 @@ async function pickMode(m){
   const d=await pollHelper();
   if(d && !d.all_present) show("scSetup"); else show("scIdle");
 }
-document.querySelectorAll("[data-pick]").forEach(el=>
-  el.onclick=()=>pickMode(el.dataset.pick));
 $("btnSwitchMode").onclick=()=>show("scHome");
 $("btnSetupBack").onclick=()=>show("scHome");
 $("btnGenerate").onclick=()=>{show("scInput");refreshEstimate();};
@@ -1078,7 +1118,8 @@ let setupSeen=false;
   let last="video";
   try{ last=localStorage.getItem("ovg_mode")||"video"; }catch(e){}
   applyMode(last);
-  show("scHome");                 // always start on the picker
+  renderModes();
+  show("scHome");
   await pollHelper();             // fills in the ready/needs-download tags
   setConn("","ComfyUI…"); connect();
   pollQueue(); setInterval(pollQueue,2000);
