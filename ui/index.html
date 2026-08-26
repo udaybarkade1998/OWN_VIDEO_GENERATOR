@@ -338,7 +338,7 @@ Vertical macro of dew on a spiderweb, camera drifting right, golden backlight
         <span>Batch progress</span><span id="totalPct">0%</span></div>
       <div class="stats">
         <div class="stat"><div class="k">Elapsed</div><div class="v mono" id="stElapsed">0:00</div></div>
-        <div class="stat"><div class="k">Per clip</div><div class="v mono" id="stPer">—</div></div>
+        <div class="stat"><div class="k" id="kPer">Per clip</div><div class="v mono" id="stPer">—</div></div>
         <div class="stat"><div class="k">Sec / step</div><div class="v mono" id="stStep">—</div></div>
         <div class="stat"><div class="k">Done</div><div class="v mono" id="stDone">0</div></div>
       </div>
@@ -761,11 +761,11 @@ async function runClip(i){
   qi=i; const it=queue[i];
   clipStart=performance.now(); sampStart=0; secPerStep=0; lastPhaseNode=null;
   curSteps=it.steps; curTokensM=tokensOf(it.w,it.h,it.frames)/1e6;
-  $("clipLbl").textContent=`Clip ${i+1} of ${queue.length}`;
+  $("clipLbl").textContent=`${MODE==="image"?"Image":"Clip"} ${i+1} of ${queue.length}`;
   $("phaseLbl").textContent="Queued…";
   $("barClip").style.width="0%"; $("clipPct").textContent="0%"; $("stepLbl").textContent="";
   resetStages();
-  log(`<b>Clip ${i+1}</b> — ${esc(it.prompt.slice(0,70))}${it.prompt.length>70?"…":""}`);
+  log(`<b>${MODE==="image"?"Image":"Clip"} ${i+1}</b> — ${esc(it.prompt.slice(0,70))}${it.prompt.length>70?"…":""}`);
   try{ curPromptId=await submit(it); pollQueue(); }
   catch(e){ log("ERROR: "+esc(e.message),"e"); nextClip(); }
 }
@@ -777,7 +777,7 @@ async function clipFinished(){
   $("wrapIndet").classList.add("hidden"); $("wrapDet").classList.remove("hidden");
   const secs=(performance.now()-clipStart)/1000;
   doneCount++; $("stDone").textContent=doneCount; $("stPer").textContent=fmt(secs);
-  log(`Clip ${qi+1} finished in <b>${fmt(secs)}</b>`,"g");
+  log(`${MODE==="image"?"Image":"Clip"} ${qi+1} finished in <b>${fmt(secs)}</b>`,"g");
   if(secPerStep>0 && MODE==="image"){
     const mpx=(queue[qi].w*queue[qi].h)/1e6;
     const a=icalib.measured?0.35:1.0;
@@ -876,6 +876,9 @@ function applyMode(m){
   $("setVideo").classList.toggle("hidden",m==="image");
   $("setupMode").textContent=m;
   $("idleMode").textContent=(m==="image"?"Image":"Video")+" mode";
+  $("kPer").textContent = m==="image" ? "Per image" : "Per clip";
+  $("btnStop").textContent = m==="image"
+    ? "Stop after current image" : "Stop after current clip";
   document.querySelectorAll("header .sub")[0].textContent =
     m==="image" ? "SDXL Lightning · 9:16 stills" : "Wan 2.1 1.3B · 9:16 Shorts";
   const ck=m==="image"?icalib:calib;
@@ -920,11 +923,13 @@ $("btnStart").onclick=()=>{
   $("log").innerHTML=""; $("stDone").textContent="0";
   $("stPer").textContent="—"; $("stStep").textContent="—";
   running=true; batchStart=performance.now(); show("scRun");
-  log(`Batch started — ${queue.length} clip${queue.length===1?"":"s"} at ${c.w}×${c.h}, ${c.frames}f, ${c.steps} steps`);
+  log(MODE==="image"
+    ? `Batch started — ${queue.length} image${queue.length===1?"":"s"} at ${c.w}×${c.h}, ${c.steps} steps`
+    : `Batch started — ${queue.length} clip${queue.length===1?"":"s"} at ${c.w}×${c.h}, ${c.frames}f, ${c.steps} steps`);
   if(!calib.measured) log("No baseline yet — this run measures your machine.","w");
   runClip(0);
 };
-$("btnStop").onclick=()=>{stopAfter=true;log("Will stop after the current clip finishes.","w");};
+$("btnStop").onclick=()=>{stopAfter=true;log(`Will stop after the current ${MODE==="image"?"image":"clip"} finishes.`,"w");};
 
 // ---------- boot ----------
 (async function boot(){
