@@ -300,6 +300,36 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if self.path.startswith("/api/gallery"):
+            from urllib.parse import urlparse, parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            limit = int((qs.get("limit") or ["300"])[0])
+            kind = (qs.get("kind") or ["all"])[0]
+            out = Path(COMFY_ROOT) / "output"
+            exts = {"image": {".png", ".jpg", ".jpeg", ".webp"},
+                    "video": {".webm", ".mp4", ".gif"}}
+            want = exts.get(kind) or (exts["image"] | exts["video"])
+            items = []
+            if out.is_dir():
+                for f in out.rglob("*"):
+                    if not f.is_file() or f.suffix.lower() not in want:
+                        continue
+                    try:
+                        st = f.stat()
+                    except OSError:
+                        continue
+                    items.append({
+                        "filename": f.name,
+                        "subfolder": str(f.parent.relative_to(out)).replace("\\", "/")
+                                     if f.parent != out else "",
+                        "size": st.st_size,
+                        "mtime": int(st.st_mtime),
+                        "kind": "video" if f.suffix.lower() in exts["video"] else "image",
+                    })
+            items.sort(key=lambda x: x["mtime"], reverse=True)
+            return self._json({"output_dir": str(out), "count": len(items),
+                               "items": items[:limit]})
+
         if self.path.startswith("/api/status"):
             from urllib.parse import urlparse, parse_qs
             qs = parse_qs(urlparse(self.path).query)
@@ -333,6 +363,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        if self.path.startswith("/api/delete"):
+            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+            except Exception:
+                return self._json({"ok": False, "error": "bad json"}, 400)
+            out = (Path(COMFY_ROOT) / "output").resolve()
+            removed, failed = [], []
+            for name in body.get("files", [])[:200]:
+                try:
+                    # resolve and confirm it is really inside output/ - never
+                    # let a crafted name escape the folder
+                    t = (out / name).resolve()
+                    if out not in t.parents and t.parent != out:
+                        failed.append(name); continue
+                    t.unlink()
+                    removed.append(name)
+                except Exception:
+                    failed.append(name)
+            return self._json({"ok": True, "removed": removed, "failed": failed})
+
         if self.path.startswith("/api/download"):
             from urllib.parse import urlparse, parse_qs
             qs = parse_qs(urlparse(self.path).query)

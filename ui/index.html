@@ -107,6 +107,24 @@
   .pathbox{display:flex;align-items:center;gap:10px;background:var(--bg);
     border:1px solid var(--line);border-radius:8px;padding:10px 13px;margin-top:6px}
   .pathbox code{background:none;padding:0;flex:1;font-size:12.5px}
+  .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .gi{position:relative;background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;overflow:hidden;cursor:pointer;transition:.15s}
+  .gi:hover{border-color:var(--accent)}
+  .gi img,.gi video{width:100%;display:block;background:#000;aspect-ratio:9/16;object-fit:cover}
+  .gi .cap{padding:7px 9px;font-size:11px;color:var(--dim);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gi .badge{position:absolute;top:6px;left:6px;font-size:9.5px;padding:2px 7px;
+    border-radius:99px;background:rgba(0,0,0,.72);color:#fff;letter-spacing:.4px}
+  .gi .del{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;
+    border:none;background:rgba(0,0,0,.72);color:#ff8f9a;font-size:13px;line-height:1;
+    cursor:pointer;padding:0;display:none}
+  .gi:hover .del{display:block}
+  .gi.sel{border-color:var(--accent2);box-shadow:0 0 0 2px rgba(62,224,143,.3)}
+  .lb{position:fixed;inset:0;background:rgba(6,8,11,.93);z-index:100;display:flex;
+    align-items:center;justify-content:center;flex-direction:column;gap:14px;padding:26px}
+  .lb img,.lb video{max-width:min(92vw,560px);max-height:80vh;border-radius:10px}
+  .lb .info{color:var(--dim);font-size:13px;text-align:center}
   .modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
   .mode{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:22px;
     cursor:pointer;transition:.15s;text-align:left}
@@ -143,6 +161,7 @@
   <h1>OWN Video Generator</h1>
   <span class="sub">Wan 2.1 1.3B · 9:16 Shorts</span>
   <div class="spacer"></div>
+  <button class="tiny" id="btnGallery">Gallery</button>
   <span class="pill"><span class="dot" id="dotHelper"></span><span id="helperTxt">helper…</span></span>
   <span class="pill"><span class="dot" id="dot"></span><span id="connTxt">ComfyUI…</span></span>
 </header>
@@ -362,6 +381,31 @@ Vertical macro of dew on a spiderweb, camera drifting right, golden backlight
     </div>
   </section>
 
+  <!-- ===================== GALLERY ===================== -->
+  <section id="scGallery" class="hidden">
+    <div class="card">
+      <h2>Gallery <span class="pill" id="galCount"
+          style="text-transform:none;letter-spacing:0">—</span>
+        <span class="spacer"></span>
+        <button class="tiny" id="galBack">Back</button></h2>
+      <div class="tabs" style="margin-bottom:14px">
+        <div class="tab active" data-gk="all">All</div>
+        <div class="tab" data-gk="image">Images</div>
+        <div class="tab" data-gk="video">Videos</div>
+        <span class="spacer"></span>
+        <button class="tiny danger" id="galDelSel" disabled>Delete selected</button>
+        <button class="tiny" id="galRefresh">Refresh</button>
+      </div>
+      <div class="gal" id="galGrid"></div>
+      <p class="hint" id="galNote"></p>
+      <div style="margin-top:16px">
+        <label>Folder</label>
+        <div class="pathbox"><code id="galPath">…</code>
+          <button class="tiny" id="galCopy">Copy</button></div>
+      </div>
+    </div>
+  </section>
+
   <!-- ===================== RESULTS ===================== -->
   <section id="scDone" class="hidden">
     <div class="card">
@@ -533,7 +577,7 @@ function log(msg,cls){const l=$("log");if(!l)return;
   l.insertAdjacentHTML("beforeend",
     `<div><span style="opacity:.5">${t}</span> <span class="${cls||""}">${msg}</span></div>`);
   l.scrollTop=l.scrollHeight;}
-function show(id){["scHome","scSetup","scIdle","scInput","scRun","scDone"]
+function show(id){["scHome","scSetup","scIdle","scInput","scRun","scDone","scGallery"]
   .forEach(s=>$(s).classList.toggle("hidden",s!==id));}
 const esc=s=>String(s).replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
 
@@ -889,7 +933,7 @@ function applyMode(m){
     : `Not calibrated yet — your first run measures this PC.`;
 }
 async function pickMode(m){
-  applyMode(m);
+  applyMode(m); setupSeen=true;
   const d=await pollHelper();
   if(d && !d.all_present) show("scSetup"); else show("scIdle");
 }
@@ -930,6 +974,99 @@ $("btnStart").onclick=()=>{
   runClip(0);
 };
 $("btnStop").onclick=()=>{stopAfter=true;log(`Will stop after the current ${MODE==="image"?"image":"clip"} finishes.`,"w");};
+
+// ---------- gallery ----------
+let galKind="all", galItems=[], galSel=new Set();
+const viewURL=it=>`${COMFY}/view?`+new URLSearchParams(
+  {filename:it.filename,subfolder:it.subfolder||"",type:"output"});
+function ago(ts){
+  const s=Math.max(0,Date.now()/1000-ts);
+  if(s<60)return "just now";
+  if(s<3600)return Math.floor(s/60)+"m ago";
+  if(s<86400)return Math.floor(s/3600)+"h ago";
+  return Math.floor(s/86400)+"d ago";
+}
+async function loadGallery(){
+  try{
+    const d=await (await fetch(`/api/gallery?kind=${galKind}&limit=300`,
+      {cache:"no-store"})).json();
+    galItems=d.items; galSel.clear(); updateDelBtn();
+    $("galPath").textContent=d.output_dir;
+    $("galCount").textContent=`${d.count} file${d.count===1?"":"s"}`;
+    if(!galItems.length){
+      $("galGrid").innerHTML="";
+      $("galNote").textContent="Nothing here yet — generate something first.";
+      return;
+    }
+    $("galNote").innerHTML="Click to open. Hover for the delete button. "
+      +"Shift-click to select several, then use Delete selected.";
+    $("galGrid").innerHTML=galItems.map((it,i)=>`
+      <div class="gi" data-i="${i}">
+        <span class="badge">${it.kind==="video"?"VIDEO":"IMG"}</span>
+        <button class="del" data-del="${i}" title="Delete">×</button>
+        ${it.kind==="video"
+          ? `<video src="${viewURL(it)}" muted loop preload="metadata"></video>`
+          : `<img src="${viewURL(it)}" loading="lazy" alt="">`}
+        <div class="cap">${esc(it.filename)}<br>${human(it.size)} · ${ago(it.mtime)}</div>
+      </div>`).join("");
+    $("galGrid").querySelectorAll(".gi").forEach(el=>{
+      const i=+el.dataset.i;
+      el.onclick=ev=>{
+        if(ev.target.dataset.del!==undefined) return;
+        if(ev.shiftKey){
+          galSel.has(i)?galSel.delete(i):galSel.add(i);
+          el.classList.toggle("sel",galSel.has(i)); updateDelBtn(); return;
+        }
+        openLightbox(i);
+      };
+      const v=el.querySelector("video");
+      if(v){ el.onmouseenter=()=>v.play().catch(()=>{});
+             el.onmouseleave=()=>{v.pause();v.currentTime=0;}; }
+    });
+    $("galGrid").querySelectorAll("[data-del]").forEach(b=>
+      b.onclick=ev=>{ev.stopPropagation(); delFiles([galItems[+b.dataset.del]]);});
+  }catch(e){ $("galNote").textContent="Gallery unavailable: "+e.message; }
+}
+function updateDelBtn(){
+  $("galDelSel").disabled=!galSel.size;
+  $("galDelSel").textContent=galSel.size?`Delete ${galSel.size} selected`:"Delete selected";
+}
+async function delFiles(items){
+  if(!items.length)return;
+  const names=items.map(i=>(i.subfolder?i.subfolder+"/":"")+i.filename);
+  if(!confirm(`Delete ${names.length} file${names.length===1?"":"s"}? This cannot be undone.`))return;
+  try{
+    const r=await (await fetch("/api/delete",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({files:names})})).json();
+    if(r.failed&&r.failed.length) alert("Could not delete: "+r.failed.join(", "));
+    loadGallery();
+  }catch(e){ alert("Delete failed: "+e.message); }
+}
+function openLightbox(i){
+  const it=galItems[i];
+  const d=document.createElement("div"); d.className="lb";
+  d.innerHTML=`${it.kind==="video"
+      ? `<video src="${viewURL(it)}" controls autoplay loop></video>`
+      : `<img src="${viewURL(it)}" alt="">`}
+    <div class="info">${esc(it.filename)} · ${human(it.size)} · ${ago(it.mtime)}<br>
+      <span style="opacity:.7">click anywhere to close</span></div>`;
+  d.onclick=()=>d.remove();
+  document.body.appendChild(d);
+  const esckey=ev=>{ if(ev.key==="Escape"){d.remove();document.removeEventListener("keydown",esckey);} };
+  document.addEventListener("keydown",esckey);
+}
+$("btnGallery").onclick=()=>{ show("scGallery"); loadGallery(); };
+$("galBack").onclick=()=>show(MODE&&setupSeen?"scIdle":"scHome");
+$("galRefresh").onclick=loadGallery;
+$("galDelSel").onclick=()=>delFiles([...galSel].map(i=>galItems[i]));
+$("galCopy").onclick=()=>navigator.clipboard.writeText($("galPath").textContent||"")
+  .then(()=>{$("galCopy").textContent="Copied";
+    setTimeout(()=>$("galCopy").textContent="Copy",1400);});
+document.querySelectorAll("[data-gk]").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll("[data-gk]").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active"); galKind=t.dataset.gk; loadGallery();});
+let setupSeen=false;
 
 // ---------- boot ----------
 (async function boot(){
