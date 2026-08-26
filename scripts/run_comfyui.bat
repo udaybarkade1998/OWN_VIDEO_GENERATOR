@@ -7,10 +7,14 @@ REM ============================================================
 REM ---- EDIT THIS to your portable folder (the one containing run_nvidia_gpu.bat)
 set "COMFY_PORTABLE=D:\ComfyUI\ComfyUI_windows_portable"
 
-REM ---- How much VRAM to leave for Windows + your browser.
-REM      0.6  = display moved to the Intel iGPU  (recommended, see docs\SETUP.md step 2)
-REM      1.8  = monitor still plugged into the GTX 1650
-set "RESERVE=1.8"
+REM ---- How much VRAM to leave for Windows + the browser tab running the UI.
+REM      Measure your real idle usage with the apps you keep open:
+REM         nvidia-smi --query-gpu=memory.used --format=csv
+REM      then set RESERVE to that value in GB, plus ~0.3 headroom.
+REM      0.8  = lean desktop, Chrome hardware acceleration OFF
+REM      1.2  = a few apps open  (starting point for this PC)
+REM      1.8  = heavy: Chrome with HW accel, VS Code, overlays all running
+set "RESERVE=1.2"
 
 cd /d "%COMFY_PORTABLE%"
 if not exist "python_embeded\python.exe" (
