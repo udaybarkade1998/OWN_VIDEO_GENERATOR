@@ -10,3 +10,7 @@
 output/
 models/
 ComfyUI_windows_portable/
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
