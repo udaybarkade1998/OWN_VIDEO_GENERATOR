@@ -177,8 +177,8 @@ It resumes on interruption and skips anything already downloaded.
   Quantizing it would save ~1 GB but visibly costs quality, and there is no published
   GGUF for Wan 2.1 T2V 1.3B anyway. Spend your VRAM budget here.
 - **GGUF (not FP16) for the text encoder.** UMT5-XXL is 11 GB at FP16. Q5_K_M is
-  4.15 GB with no meaningful prompt-fidelity loss, and the workflow runs it on the
-  **CPU**, so it costs **0 VRAM**. This is the single biggest saving in the stack.
+  4.15 GB with no meaningful prompt-fidelity loss, and `--lowvram` keeps it
+  off the GPU, so it costs effectively **0 VRAM** during sampling. This is the single biggest saving in the stack.
 - **Not the `fp8_e4m3fn` encoder** that ComfyUI's official example uses — your SM75
   card has no FP8 units, so you would get the worst of both worlds.
 

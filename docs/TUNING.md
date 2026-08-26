@@ -16,8 +16,8 @@
 | Shift | **5.0** | `ModelSamplingSD3` |
 | LoRA strength | **1.0** | `LoraLoaderModelOnly` |
 | VAE tile / overlap | **256 / 64** | `VAEDecodeTiled` |
-| VAE temporal / overlap | **8 / 2** | `VAEDecodeTiled` |
-| Text encoder device | **cpu** | `CLIPLoaderGGUF` |
+| VAE temporal / overlap | **8 / 4** | `VAEDecodeTiled` |
+| Text encoder offload | automatic via `--lowvram` | `CLIPLoaderGGUF` |
 
 Delivered to YouTube as **1080 × 1920 @ 32 fps H.264** after `finish_short.bat`.
 
@@ -77,7 +77,7 @@ Frame count must always be **4n+1** (Wan's VAE compresses 4× temporally):
 | Step | Change |
 |---|---|
 | 1 | Frames 33 → **25** (1.56 s) — cheapest win, quadratic saving |
-| 2 | `VAEDecodeTiled` tile_size 256 → **192**, temporal_size 8 → **4** |
+| 2 | `VAEDecodeTiled` tile_size 256 → **192** (temporal_size min is 8, overlap min is 4) |
 | 3 | Resolution → **384 × 688** (still ~9:16, still ÷16) |
 | 4 | `RESERVE` in the .bat → raise by 0.3 |
 | 5 | Swap `--lowvram` → **`--novram`** in the .bat (much slower, nearly always fits) |

@@ -31,8 +31,7 @@
     "class_type": "CLIPLoaderGGUF",
     "inputs": {
       "clip_name": "umt5-xxl-encoder-Q5_K_M.gguf",
-      "type": "wan",
-      "device": "cpu"
+      "type": "wan"
     }
   },
   "6": {
@@ -111,7 +110,7 @@
       "tile_size": 256,
       "overlap": 64,
       "temporal_size": 8,
-      "temporal_overlap": 2
+      "temporal_overlap": 4
     }
   },
   "47": {

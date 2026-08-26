@@ -286,7 +286,7 @@ function buildPrompt(o){
     "100":{class_type:"LoraLoaderModelOnly",inputs:{model:["37",0],
         lora_name:"Wan2_1_self_forcing_dmd_1_3B_lora_rank_32_fp16.safetensors",strength_model:1.0}},
     "101":{class_type:"ModelSamplingSD3",inputs:{model:["100",0],shift:5.0}},
-    "38":{class_type:"CLIPLoaderGGUF",inputs:{clip_name:"umt5-xxl-encoder-Q5_K_M.gguf",type:"wan",device:"cpu"}},
+    "38":{class_type:"CLIPLoaderGGUF",inputs:{clip_name:"umt5-xxl-encoder-Q5_K_M.gguf",type:"wan"}},
     "6":{class_type:"CLIPTextEncode",inputs:{clip:["38",0],text:o.prompt}},
     "7":{class_type:"CLIPTextEncode",inputs:{clip:["38",0],text:NEG}},
     "40":{class_type:"EmptyHunyuanLatentVideo",inputs:{width:o.w,height:o.h,length:o.frames,batch_size:1}},
@@ -295,7 +295,7 @@ function buildPrompt(o){
         sampler_name:"lcm",scheduler:"simple",denoise:1.0}},
     "39":{class_type:"VAELoader",inputs:{vae_name:"wan_2.1_vae.safetensors"}},
     "8":{class_type:"VAEDecodeTiled",inputs:{samples:["3",0],vae:["39",0],
-        tile_size:256,overlap:64,temporal_size:8,temporal_overlap:2}},
+        tile_size:256,overlap:64,temporal_size:8,temporal_overlap:4}},
     "47":{class_type:"SaveWEBM",inputs:{images:["8",0],filename_prefix:"short",codec:"vp9",fps:16,crf:18}}
   };
 }

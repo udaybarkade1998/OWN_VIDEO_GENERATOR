@@ -146,10 +146,9 @@
       },
       "widgets_values": [
         "umt5-xxl-encoder-Q5_K_M.gguf",
-        "wan",
-        "cpu"
+        "wan"
       ],
-      "title": "Text encoder (GGUF, on CPU)"
+      "title": "Text encoder (GGUF, offloaded by --lowvram)"
     },
     {
       "id": 6,
@@ -401,7 +400,7 @@
         256,
         64,
         8,
-        2
+        4
       ],
       "title": "Tiled decode (VRAM safe)"
     },
