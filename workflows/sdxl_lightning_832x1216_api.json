@@ -44,8 +44,8 @@
   "5": {
     "class_type": "EmptyLatentImage",
     "inputs": {
-      "width": 720,
-      "height": 1280,
+      "width": 832,
+      "height": 1216,
       "batch_size": 1
     }
   },
@@ -69,7 +69,7 @@
         0
       ],
       "seed": 0,
-      "steps": 4,
+      "steps": 8,
       "cfg": 1.0,
       "sampler_name": "euler",
       "scheduler": "sgm_uniform",

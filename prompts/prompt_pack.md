@@ -99,3 +99,69 @@ At 2 seconds per clip you need **12–15 keepers**. Plan for that:
 **Cutting on the beat hides a lot.** Two-second clips cut to a music beat read as
 deliberate editing rather than a technical limit — this is the main reason short clips
 are not the problem they sound like.
+
+---
+
+# Image prompts (SDXL)
+
+Different model, different rules. SDXL is **not** Wan — no camera motion needed,
+and it responds to comma-separated tags more than flowing sentences.
+
+## What actually matters
+
+**Use SDXL's own aspect ratios.** This is the single biggest quality lever and it
+has nothing to do with your prompt. SDXL was trained on fixed resolution buckets
+around 1 megapixel. Push it taller than 832×1216 and it either shrinks the subject
+to a speck or duplicates it to fill the frame:
+
+| Resolution | Result |
+|---|---|
+| **832 × 1216** | ✅ default — tallest bucket that still behaves |
+| **896 × 1152** | ✅ most detail, slightly wider |
+| 768 × 1344 | ⚠ starts duplicating |
+| 720 × 1280 | ❌ subject shrinks badly, or you get two of it |
+
+Generate at a native ratio, then `scripts/finish_image.bat` (or `.sh`) upscales and
+centre-crops to 1080×1920 for Shorts.
+
+**8 steps, not 4.** With the Lightning LoRA, 8 steps is visibly sharper than 4 for
+about 15 extra seconds. 4 is for drafts.
+
+**Length.** 15–40 words. "best car" gives you a generic stock photo — the model has
+nothing to work with. Name the subject, the lens, the light, and the mood.
+
+## Formula
+
+```
+[subject] + [what it's doing / how it sits] + [setting] +
+[lighting] + [lens / camera] + [style words]
+```
+
+> a vintage orange muscle car parked on a tree-lined street, low angle,
+> golden hour light, shallow depth of field, highly detailed, 35mm photo
+
+## Things SDXL cannot do
+
+- **Text and logos.** "channel logo with the text Ud2056 Gaming" will never work —
+  it produces letter-shaped noise. Generate the artwork, add real text in Canva,
+  Photoshop or your video editor.
+- **Maps, diagrams, charts.** "india map" gives you a vaguely map-shaped blob.
+  Use a real map image.
+- **Accurate counts.** "five birds" gives you some birds.
+- **Specific real people.** Not reliably, and it's a bad idea for a public channel.
+
+## Useful style suffixes
+
+| Want | Append |
+|---|---|
+| Photoreal | `35mm photo, shallow depth of field, natural light, highly detailed` |
+| Cinematic | `cinematic lighting, anamorphic, film grain, colour graded` |
+| Product shot | `studio lighting, seamless background, product photography, sharp focus` |
+| Illustration | `digital illustration, clean linework, vibrant colours, flat shading` |
+| Thumbnail punch | `dramatic rim light, high contrast, bold colours, centred composition` |
+
+## Negative prompt
+
+Already applied for you, including anti-duplication terms
+(`duplicate, repeated subject, collage, split screen, grid`). You don't need to
+add anything unless you're fighting a specific artifact.

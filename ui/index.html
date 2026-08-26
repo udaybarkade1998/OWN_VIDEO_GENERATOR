@@ -272,15 +272,15 @@ Vertical macro of dew on a spiderweb, camera drifting right, golden backlight
       <div class="grid">
         <div><label>Resolution</label>
           <select id="iRes">
-            <option value="576x1024">576×1024 — fastest</option>
-            <option value="720x1280" selected>720×1280 — exact 9:16 ★</option>
-            <option value="832x1216">832×1216 — SDXL native bucket</option>
+            <option value="832x1216" selected>832×1216 — SDXL native ★</option>
+            <option value="896x1152">896×1152 — wider, most detail</option>
+            <option value="768x1344">768×1344 — taller (may duplicate)</option>
           </select></div>
         <div><label>Steps</label>
           <select id="iSteps">
-            <option value="4" selected>4 — Lightning ★</option>
-            <option value="6">6</option>
-            <option value="8">8 — most detail</option>
+            <option value="8" selected>8 — best detail ★</option>
+            <option value="6">6 — faster</option>
+            <option value="4">4 — fastest, softer</option>
           </select></div>
         <div><label>Images per prompt</label>
           <select id="iVar">
@@ -288,8 +288,11 @@ Vertical macro of dew on a spiderweb, camera drifting right, golden backlight
             <option value="4">4 — pick the best</option>
           </select></div>
       </div>
-      <p class="hint">SDXL is trained around 1 megapixel. 720×1280 is exact 9:16 and
-        upscales ×1.5 to 1080×1920.</p>
+      <p class="hint"><b>Use SDXL's own aspect ratios.</b> It was trained on fixed
+        buckets around 1 megapixel, and pushing it taller than 832×1216 makes it shrink
+        the subject or duplicate it to fill the frame. Generate at a native ratio, then
+        <code>scriptsinish_image.bat</code> upscales and centre-crops to 1080×1920
+        for Shorts.</p>
     </div>
 
     <div class="card" id="setVideo">
@@ -498,7 +501,9 @@ const phaseFor=()=>MODE==="image"?IPHASES:PHASES;
 
 const INEG="blurry, low quality, worst quality, jpeg artifacts, watermark, text, logo, "
  +"signature, deformed, disfigured, extra limbs, bad hands, bad anatomy, oversaturated, "
- +"lowres, cropped, out of frame";
+ +"lowres, cropped, out of frame, "
+ // SDXL repeats the subject when pushed past its trained aspect ratios
+ +"duplicate, two of the same, repeated subject, mirrored, collage, split screen, grid";
 
 function buildImagePrompt(o){return{
  "1":{class_type:"CheckpointLoaderSimple",inputs:{ckpt_name:"sd_xl_base_1.0.safetensors"}},
