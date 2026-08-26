@@ -30,6 +30,7 @@ python_embeded\python.exe -s ComfyUI\main.py ^
   --disable-smart-memory ^
   --fp16-vae ^
   --preview-method none ^
-  --auto-launch
+  --enable-cors-header "*" ^
+  --listen 127.0.0.1
 
 pause

@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OWN Video Generator</title>
+<style>
+  :root{
+    --bg:#0e1014; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --text:#e7eaf0; --dim:#8b94a7; --accent:#5b8cff; --accent2:#3ee08f;
+    --warn:#ffb020; --err:#ff5c6c; --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:16px 24px;
+    border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.2px}
+  header .sub{color:var(--dim);font-size:13px}
+  .spacer{flex:1}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;
+    background:var(--panel2);border:1px solid var(--line);font-size:12.5px;color:var(--dim)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--err)}
+  .dot.ok{background:var(--accent2);box-shadow:0 0 8px var(--accent2)}
+  .dot.busy{background:var(--warn);animation:pulse 1.1s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  main{max-width:1080px;margin:0 auto;padding:28px 24px 80px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px;margin-bottom:18px}
+  h2{font-size:14px;margin:0 0 16px;font-weight:600;color:var(--dim);
+    text-transform:uppercase;letter-spacing:.7px}
+  button{font:inherit;border:none;border-radius:9px;padding:11px 20px;cursor:pointer;
+    background:var(--panel2);color:var(--text);border:1px solid var(--line);transition:.15s}
+  button:hover:not(:disabled){background:#262b36;border-color:#3a4150}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button.primary:hover:not(:disabled){background:#4a7bf0}
+  button.danger{background:transparent;border-color:var(--err);color:var(--err)}
+  button.big{padding:18px 40px;font-size:17px;border-radius:11px}
+  .tabs{display:flex;gap:8px;margin-bottom:16px}
+  .tab{padding:9px 18px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);
+    cursor:pointer;font-size:14px;color:var(--dim)}
+  .tab.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  textarea{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);
+    border-radius:9px;padding:14px;font:14px/1.6 inherit;resize:vertical}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  .hint{color:var(--dim);font-size:13px;margin:8px 0 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
+  label{display:block;font-size:12px;color:var(--dim);margin-bottom:6px;
+    text-transform:uppercase;letter-spacing:.5px}
+  select,input[type=number]{width:100%;background:var(--bg);color:var(--text);
+    border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit}
+  select:focus,input:focus{outline:none;border-color:var(--accent)}
+  .bar{height:9px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+  .bar>div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));
+    width:0;transition:width .3s ease}
+  .bar.total>div{background:var(--accent)}
+  .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:12px}
+  .big-num{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+  .mono{font-family:"Cascadia Code",Consolas,monospace;font-variant-numeric:tabular-nums}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+    gap:14px;margin-top:20px}
+  .stat{background:var(--panel2);border-radius:9px;padding:13px 15px}
+  .stat .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+  .stat .v{font-size:19px;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums}
+  #log{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:12px 14px;
+    height:150px;overflow-y:auto;font-family:"Cascadia Code",Consolas,monospace;
+    font-size:12px;line-height:1.65;color:var(--dim);margin-top:18px}
+  #log b{color:var(--text);font-weight:500}
+  #log .e{color:var(--err)}
+  #log .g{color:var(--accent2)}
+  .qlist{display:flex;flex-direction:column;gap:7px;margin-top:16px}
+  .qitem{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--panel2);
+    border-radius:8px;font-size:13.5px}
+  .qitem .idx{color:var(--dim);font-size:11.5px;min-width:44px;font-variant-numeric:tabular-nums}
+  .qitem .txt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
+  .qitem.done .txt,.qitem.run .txt{color:var(--text)}
+  .qitem .st{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--bg);color:var(--dim)}
+  .qitem.run .st{background:var(--warn);color:#000;font-weight:600}
+  .qitem.done .st{background:var(--accent2);color:#000;font-weight:600}
+  .qitem.err .st{background:var(--err);color:#fff;font-weight:600}
+  .results{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+  .res{background:var(--panel2);border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .res video{width:100%;display:block;background:#000;aspect-ratio:9/16;object-fit:cover}
+  .res .meta{padding:10px 12px;font-size:12px;color:var(--dim)}
+  .res .meta .p{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    margin-bottom:5px}
+  .hidden{display:none!important}
+  .banner{padding:13px 16px;border-radius:9px;margin-bottom:18px;font-size:13.5px;
+    border:1px solid;display:flex;gap:10px;align-items:flex-start}
+  .banner.warn{background:rgba(255,176,32,.09);border-color:rgba(255,176,32,.35);color:#ffd48a}
+  .banner.err{background:rgba(255,92,108,.09);border-color:rgba(255,92,108,.35);color:#ffa8b1}
+  code{background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12.5px;
+    font-family:"Cascadia Code",Consolas,monospace}
+  .center{text-align:center;padding:36px 0}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>OWN Video Generator</h1>
+  <span class="sub">Wan 2.1 1.3B · 9:16 Shorts</span>
+  <div class="spacer"></div>
+  <span class="pill"><span class="dot" id="dot"></span><span id="connTxt">connecting…</span></span>
+</header>
+
+<main>
+
+  <!-- ERROR BANNER -->
+  <div id="errBanner" class="banner err hidden">
+    <span>⚠</span>
+    <div>
+      <b>Can't reach ComfyUI at 127.0.0.1:8188.</b><br>
+      Start it with <code>scripts\run_comfyui.bat</code> — that launcher passes the
+      <code>--enable-cors-header</code> flag this page needs.
+    </div>
+  </div>
+
+  <!-- ===== IDLE ===== -->
+  <section id="scIdle">
+    <div class="card center">
+      <button class="primary big" id="btnGenerate">Generate</button>
+      <p class="hint" id="calibNote" style="margin-top:16px"></p>
+    </div>
+  </section>
+
+  <!-- ===== INPUT ===== -->
+  <section id="scInput" class="hidden">
+    <div class="card">
+      <h2>What are we making?</h2>
+      <div class="tabs">
+        <div class="tab active" data-mode="text">Single prompt</div>
+        <div class="tab" data-mode="script">Script — one clip per line</div>
+      </div>
+
+      <div id="paneText">
+        <textarea id="txtPrompt" rows="4" placeholder="Cinematic vertical shot, slow tracking camera drifting forward through a misty pine forest at sunrise, volumetric god rays, soft golden light, film grain, 35mm"></textarea>
+        <p class="hint">Always name a camera motion — without one Wan tends to produce a near-still image.</p>
+      </div>
+
+      <div id="paneScript" class="hidden">
+        <textarea id="txtScript" rows="9" placeholder="Vertical shot of rain on a neon city street at night, camera pushing slowly forward, pink and cyan glow
+Vertical macro of dew on a spiderweb, camera drifting right, golden backlight
+Vertical shot of embers rising from a campfire, camera tilting up slowly
+
+# lines starting with # are ignored"></textarea>
+        <p class="hint">One clip per line. Blank lines and <code>#</code> comments are skipped.
+          Each line becomes a separate 2-second clip, generated in sequence.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="grid">
+        <div>
+          <label>Resolution</label>
+          <select id="selRes">
+            <option value="384x688">384×688 — safest</option>
+            <option value="432x768" selected>432×768 — exact 9:16 ★</option>
+            <option value="480x848">480×848 — sharper, heavier</option>
+          </select>
+        </div>
+        <div>
+          <label>Frames (at 16fps)</label>
+          <select id="selFrames">
+            <option value="17">17 — 1.1 s</option>
+            <option value="25">25 — 1.6 s</option>
+            <option value="33" selected>33 — 2.1 s ★</option>
+            <option value="49">49 — 3.1 s</option>
+          </select>
+        </div>
+        <div>
+          <label>Steps</label>
+          <select id="selSteps">
+            <option value="4" selected>4 — distilled ★</option>
+            <option value="6">6 — more detail</option>
+            <option value="8">8 — slowest</option>
+          </select>
+        </div>
+        <div>
+          <label>Variations per line</label>
+          <select id="selVar">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+            <option value="3">3 — pick the best</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint" id="costNote"></p>
+    </div>
+
+    <div class="card" style="display:flex;gap:12px;align-items:center">
+      <button class="primary" id="btnStart">Start generating</button>
+      <button id="btnBack">Cancel</button>
+      <div class="spacer"></div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px">Estimated total</div>
+        <div class="big-num" id="estTotal" style="font-size:22px">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== RUNNING ===== -->
+  <section id="scRun" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div>
+          <div style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px"
+               id="phaseLbl">Starting…</div>
+          <div class="big-num" id="clipLbl">Clip 1 of 1</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px">Remaining</div>
+          <div class="big-num" id="etaLbl">—</div>
+        </div>
+      </div>
+
+      <div style="margin:18px 0 6px"><div class="bar"><div id="barClip"></div></div></div>
+      <div class="row" style="font-size:12px;color:var(--dim)">
+        <span id="clipPct">0%</span><span id="stepLbl"></span>
+      </div>
+
+      <div style="margin:16px 0 6px"><div class="bar total"><div id="barTotal"></div></div></div>
+      <div class="row" style="font-size:12px;color:var(--dim)">
+        <span>Batch progress</span><span id="totalPct">0%</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Elapsed</div><div class="v mono" id="stElapsed">0:00</div></div>
+        <div class="stat"><div class="k">Per clip</div><div class="v mono" id="stPer">—</div></div>
+        <div class="stat"><div class="k">Sec / step</div><div class="v mono" id="stStep">—</div></div>
+        <div class="stat"><div class="k">Done</div><div class="v mono" id="stDone">0</div></div>
+      </div>
+
+      <div class="qlist" id="qlist"></div>
+      <div id="log"></div>
+
+      <div style="margin-top:18px;display:flex;gap:12px">
+        <button class="danger" id="btnStop">Stop after current clip</button>
+        <button class="danger" id="btnAbort">Abort now</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== RESULTS ===== -->
+  <section id="scDone" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div><div class="big-num" id="doneTitle">Done</div>
+          <p class="hint" id="doneSub"></p></div>
+        <button class="primary" id="btnAgain">Generate more</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Clips</h2>
+      <div class="results" id="results"></div>
+      <div class="banner warn" style="margin-top:20px">
+        <span>→</span>
+        <div><b>Next step — finish for YouTube.</b> These are 432×768 @ 16fps masters.
+        Run <code>scripts\finish_short.bat "&lt;file&gt;"</code> on the keepers to get
+        1080×1920 @ 32fps MP4. It's CPU-only, so you can generate more at the same time.
+        Files are in <code>ComfyUI\output\</code>.</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+"use strict";
+const COMFY = "http://127.0.0.1:8188";
+const WSURL = "ws://127.0.0.1:8188/ws";
+const CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID()
+                  : String(Math.random()).slice(2) + Date.now());
+
+const NEG = "Overexposure, static, blurred details, subtitles, paintings, pictures, still, "
+ + "overall gray, worst quality, low quality, JPEG compression residue, ugly, mutilated, "
+ + "redundant fingers, poorly painted hands, poorly painted faces, deformed, disfigured, "
+ + "deformed limbs, fused fingers, cluttered background, three legs, a lot of people in the "
+ + "background, upside down, watermark, text, logo";
+
+// ---- API-format workflow (mirrors workflows/wan21_1.3b_shorts_432x768_api.json)
+function buildPrompt(o){
+  return {
+    "37":{class_type:"UNETLoader",inputs:{unet_name:"wan2.1_t2v_1.3B_fp16.safetensors",weight_dtype:"default"}},
+    "100":{class_type:"LoraLoaderModelOnly",inputs:{model:["37",0],
+        lora_name:"Wan2_1_self_forcing_dmd_1_3B_lora_rank_32_fp16.safetensors",strength_model:1.0}},
+    "101":{class_type:"ModelSamplingSD3",inputs:{model:["100",0],shift:5.0}},
+    "38":{class_type:"CLIPLoaderGGUF",inputs:{clip_name:"umt5-xxl-encoder-Q5_K_M.gguf",type:"wan",device:"cpu"}},
+    "6":{class_type:"CLIPTextEncode",inputs:{clip:["38",0],text:o.prompt}},
+    "7":{class_type:"CLIPTextEncode",inputs:{clip:["38",0],text:NEG}},
+    "40":{class_type:"EmptyHunyuanLatentVideo",inputs:{width:o.w,height:o.h,length:o.frames,batch_size:1}},
+    "3":{class_type:"KSampler",inputs:{model:["101",0],positive:["6",0],negative:["7",0],
+        latent_image:["40",0],seed:o.seed,steps:o.steps,cfg:1.0,
+        sampler_name:"lcm",scheduler:"simple",denoise:1.0}},
+    "39":{class_type:"VAELoader",inputs:{vae_name:"wan_2.1_vae.safetensors"}},
+    "8":{class_type:"VAEDecodeTiled",inputs:{samples:["3",0],vae:["39",0],
+        tile_size:256,overlap:64,temporal_size:8,temporal_overlap:2}},
+    "47":{class_type:"SaveWEBM",inputs:{images:["8",0],filename_prefix:"short",codec:"vp9",fps:16,crf:18}}
+  };
+}
+
+const PHASES = {
+  "37":"Loading video model","100":"Applying speed LoRA","101":"Preparing sampler",
+  "38":"Loading text encoder","6":"Encoding prompt (CPU)","7":"Encoding prompt (CPU)",
+  "40":"Allocating latent","3":"Sampling","39":"Loading VAE",
+  "8":"Decoding video (tiled)","47":"Saving clip"
+};
+
+// ---------- calibration ----------
+// Cost scales with token count, so we store seconds-per-megatoken and the
+// estimate stays valid when resolution or frame count changes.
+const DEFAULT_CALIB = { stepPerMTok: 6430, decPerMTok: 3860, loadSec: 95, measured: false };
+function loadCalib(){
+  try{ const c = JSON.parse(localStorage.getItem("ovg_calib")); if(c && c.stepPerMTok) return c; }
+  catch(e){}
+  return {...DEFAULT_CALIB};
+}
+function saveCalib(c){ try{ localStorage.setItem("ovg_calib", JSON.stringify(c)); }catch(e){} }
+let calib = loadCalib();
+
+const tokensOf = (w,h,f) => (w/16)*(h/16)*(((f-1)/4)+1);
+function estimateClip(w,h,f,steps,withLoad){
+  const mt = tokensOf(w,h,f)/1e6;
+  return steps*calib.stepPerMTok*mt + calib.decPerMTok*mt + (withLoad ? calib.loadSec : 0);
+}
+function fmt(s){
+  if(!isFinite(s)||s<0) return "—";
+  s=Math.round(s);
+  const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60;
+  return h ? `${h}:${String(m).padStart(2,"0")}:${String(x).padStart(2,"0")}`
+           : `${m}:${String(x).padStart(2,"0")}`;
+}
+
+// ---------- state ----------
+let mode="text", queue=[], qi=-1, running=false, stopAfter=false;
+let curPromptId=null, clipStart=0, batchStart=0, sampStart=0, secPerStep=0, doneCount=0;
+let curSteps=0, curTokensM=0, lastPhaseNode=null, finished=[];
+const $ = id => document.getElementById(id);
+
+function log(msg, cls){
+  const l=$("log");
+  const t=new Date().toLocaleTimeString([], {hour12:false});
+  l.insertAdjacentHTML("beforeend",
+    `<div><span style="opacity:.5">${t}</span> <span class="${cls||""}">${msg}</span></div>`);
+  l.scrollTop=l.scrollHeight;
+}
+function show(id){
+  ["scIdle","scInput","scRun","scDone"].forEach(s=>$(s).classList.toggle("hidden", s!==id));
+}
+
+// ---------- connection ----------
+let ws=null, connected=false;
+function setConn(state,txt){
+  $("dot").className = "dot" + (state?(" "+state):"");
+  $("connTxt").textContent = txt;
+  $("errBanner").classList.toggle("hidden", state!=="");
+  $("btnGenerate").disabled = (state==="");
+}
+function connect(){
+  try{ ws = new WebSocket(`${WSURL}?clientId=${CLIENT_ID}`); }
+  catch(e){ setConn("","offline"); setTimeout(connect,3000); return; }
+
+  ws.onopen = ()=>{ connected=true; setConn("ok","ComfyUI connected"); };
+  ws.onclose = ()=>{ connected=false; setConn("","offline"); setTimeout(connect,3000); };
+  ws.onerror = ()=>{ setConn("","offline"); };
+  ws.onmessage = ev =>{
+    if(typeof ev.data !== "string") return;   // binary preview frames
+    let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+    handle(m);
+  };
+}
+
+function handle(m){
+  const d = m.data || {};
+  if(m.type==="executing"){
+    if(d.node===null && d.prompt_id===curPromptId){ clipFinished(); return; }
+    if(d.node && d.node!==lastPhaseNode){
+      lastPhaseNode = d.node;
+      const p = PHASES[d.node] || ("Node "+d.node);
+      $("phaseLbl").textContent = p;
+      if(d.node==="3"){ sampStart = performance.now(); }
+      if(d.node==="8"){ log("Sampling done — decoding…"); }
+    }
+  }
+  else if(m.type==="progress"){
+    const v=d.value||0, mx=d.max||1;
+    const pct = Math.min(100, v/mx*100);
+    $("barClip").style.width = pct+"%";
+    $("clipPct").textContent = Math.round(pct)+"%";
+    $("stepLbl").textContent = `step ${v} / ${mx}`;
+    if(v>0 && sampStart){
+      secPerStep = ((performance.now()-sampStart)/1000)/v;
+      $("stStep").textContent = secPerStep.toFixed(1)+"s";
+    }
+    updateEta(v,mx);
+  }
+  else if(m.type==="execution_error"){
+    if(d.prompt_id!==curPromptId) return;
+    const msg = d.exception_message || "unknown error";
+    log("ERROR: "+msg,"e");
+    markQ(qi,"err","failed");
+    if(/CLIPLoaderGGUF|not in list|invalid value/i.test(msg))
+      log("→ Likely a missing model file or the ComfyUI-GGUF node. See docs/SETUP.md steps 5-6.","e");
+    if(/out of memory|OutOfMemory/i.test(msg))
+      log("→ Out of memory. Drop frames to 25, or see the tuning ladder in docs/TUNING.md.","e");
+    nextClip();
+  }
+}
+
+function updateEta(v,mx){
+  // remaining sampling on this clip + its decode + every clip still queued
+  const perStep = secPerStep || (calib.stepPerMTok*curTokensM);
+  const decode  = calib.decPerMTok*curTokensM;
+  const thisClip = Math.max(0,(mx-v))*perStep + decode;
+  const remaining = queue.length-1-qi;
+  const perFuture = curSteps*perStep + decode;
+  $("etaLbl").textContent = fmt(thisClip + remaining*perFuture);
+}
+
+function tick(){
+  if(running){
+    $("stElapsed").textContent = fmt((performance.now()-batchStart)/1000);
+    const totalUnits = queue.length;
+    const frac = (qi + (parseFloat($("clipPct").textContent)||0)/100) / totalUnits;
+    const p = Math.max(0,Math.min(100,frac*100));
+    $("barTotal").style.width = p+"%";
+    $("totalPct").textContent = Math.round(p)+"%";
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+// ---------- queue ----------
+function markQ(i,cls,txt){
+  const el = document.querySelector(`.qitem[data-i="${i}"]`);
+  if(!el) return;
+  el.className = "qitem "+cls;
+  el.querySelector(".st").textContent = txt;
+}
+
+async function submit(item){
+  const body = { prompt: buildPrompt(item), client_id: CLIENT_ID };
+  const r = await fetch(`${COMFY}/prompt`, {
+    method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
+  });
+  if(!r.ok){
+    const t = await r.text();
+    throw new Error(`ComfyUI rejected the job (${r.status}). ${t.slice(0,300)}`);
+  }
+  const j = await r.json();
+  return j.prompt_id;
+}
+
+async function runClip(i){
+  qi = i;
+  const it = queue[i];
+  clipStart = performance.now(); sampStart=0; secPerStep=0; lastPhaseNode=null;
+  curSteps = it.steps; curTokensM = tokensOf(it.w,it.h,it.frames)/1e6;
+
+  $("clipLbl").textContent = `Clip ${i+1} of ${queue.length}`;
+  $("phaseLbl").textContent = "Queued…";
+  $("barClip").style.width="0%"; $("clipPct").textContent="0%"; $("stepLbl").textContent="";
+  markQ(i,"run","running");
+  log(`<b>Clip ${i+1}</b> — ${it.prompt.slice(0,70)}${it.prompt.length>70?"…":""}`);
+
+  try{ curPromptId = await submit(it); }
+  catch(e){ log("ERROR: "+e.message,"e"); markQ(i,"err","failed"); nextClip(); }
+}
+
+async function clipFinished(){
+  const secs = (performance.now()-clipStart)/1000;
+  doneCount++;
+  $("stDone").textContent = doneCount;
+  $("stPer").textContent = fmt(secs);
+  markQ(qi,"done",fmt(secs));
+  log(`Clip ${qi+1} finished in <b>${fmt(secs)}</b>`,"g");
+
+  // calibrate from the real numbers (EMA)
+  if(secPerStep>0){
+    const a = calib.measured ? 0.35 : 1.0;
+    const decObs = Math.max(0, secs - secPerStep*curSteps);
+    calib.stepPerMTok = calib.measured
+      ? calib.stepPerMTok*(1-a) + (secPerStep/curTokensM)*a : secPerStep/curTokensM;
+    calib.decPerMTok = calib.measured
+      ? calib.decPerMTok*(1-a) + (decObs/curTokensM)*a : decObs/curTokensM;
+    calib.measured = true;
+    saveCalib(calib);
+  }
+
+  await collect(curPromptId, queue[qi]);
+  nextClip();
+}
+
+async function collect(pid, item){
+  try{
+    const h = await fetch(`${COMFY}/history/${pid}`).then(r=>r.json());
+    const outs = (h[pid]||{}).outputs || {};
+    for(const nid in outs) for(const key in outs[nid]){
+      const arr = outs[nid][key];
+      if(!Array.isArray(arr)) continue;
+      for(const f of arr){
+        if(!f || !f.filename) continue;
+        const q = new URLSearchParams({filename:f.filename,
+          subfolder:f.subfolder||"", type:f.type||"output"});
+        finished.push({url:`${COMFY}/view?${q}`, name:f.filename, prompt:item.prompt});
+      }
+    }
+  }catch(e){ log("Could not read output list: "+e.message,"e"); }
+}
+
+function nextClip(){
+  curPromptId=null;
+  if(stopAfter){ log("Stopped by request."); return finish(); }
+  if(qi+1 < queue.length) runClip(qi+1);
+  else finish();
+}
+
+function finish(){
+  running=false;
+  const total=(performance.now()-batchStart)/1000;
+  $("doneTitle").textContent = `${finished.length} clip${finished.length===1?"":"s"} in ${fmt(total)}`;
+  $("doneSub").textContent = doneCount
+    ? `Average ${fmt(total/Math.max(1,doneCount))} per clip. Estimates are now calibrated to your machine.`
+    : "Nothing completed — check the log above.";
+  const g=$("results"); g.innerHTML="";
+  finished.forEach(f=>{
+    const d=document.createElement("div"); d.className="res";
+    d.innerHTML = `<video src="${f.url}" controls loop muted playsinline preload="metadata"></video>
+      <div class="meta"><div class="p" title="${f.prompt.replace(/"/g,"&quot;")}">${f.prompt}</div>
+      <div class="mono" style="font-size:11px">${f.name}</div></div>`;
+    g.appendChild(d);
+  });
+  show("scDone");
+}
+
+// ---------- estimate preview ----------
+function currentCfg(){
+  const [w,h] = $("selRes").value.split("x").map(Number);
+  return { w, h, frames:+$("selFrames").value, steps:+$("selSteps").value,
+           vars:+$("selVar").value };
+}
+function lines(){
+  if(mode==="text"){ const t=$("txtPrompt").value.trim(); return t?[t]:[]; }
+  return $("txtScript").value.split("\n").map(s=>s.trim())
+    .filter(s=>s && !s.startsWith("#"));
+}
+function refreshEstimate(){
+  const c=currentCfg(), n=lines().length*c.vars;
+  const mt=tokensOf(c.w,c.h,c.frames)/1e6;
+  $("costNote").innerHTML =
+    `${(mt*1e6/1000).toFixed(1)}k tokens per clip. `
+    + `Frames cost more than pixels — attention is quadratic over the whole sequence.`;
+  if(!n){ $("estTotal").textContent="—"; return; }
+  const t = estimateClip(c.w,c.h,c.frames,c.steps,true) + (n-1)*estimateClip(c.w,c.h,c.frames,c.steps,false);
+  $("estTotal").innerHTML = fmt(t) + (calib.measured ? "" :
+    ` <span style="font-size:12px;color:var(--warn);font-weight:400">rough</span>`);
+  $("btnStart").textContent = `Start generating — ${n} clip${n===1?"":"s"}`;
+}
+
+// ---------- wiring ----------
+$("btnGenerate").onclick = ()=>{ show("scInput"); refreshEstimate(); };
+$("btnBack").onclick = ()=> show("scIdle");
+$("btnAgain").onclick = ()=>{ show("scInput"); refreshEstimate(); };
+
+document.querySelectorAll(".tab").forEach(t=> t.onclick = ()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active"); mode = t.dataset.mode;
+  $("paneText").classList.toggle("hidden", mode!=="text");
+  $("paneScript").classList.toggle("hidden", mode!=="script");
+  refreshEstimate();
+});
+["selRes","selFrames","selSteps","selVar"].forEach(id=> $(id).onchange = refreshEstimate);
+$("txtPrompt").oninput = refreshEstimate;
+$("txtScript").oninput = refreshEstimate;
+
+$("btnStart").onclick = ()=>{
+  const ls = lines();
+  if(!ls.length){ alert("Enter a prompt first."); return; }
+  const c = currentCfg();
+  queue = []; finished=[]; doneCount=0; stopAfter=false;
+  ls.forEach(p=>{
+    for(let v=0; v<c.vars; v++)
+      queue.push({prompt:p, w:c.w, h:c.h, frames:c.frames, steps:c.steps,
+                  seed: Math.floor(Math.random()*2**31)});
+  });
+
+  $("qlist").innerHTML = queue.map((q,i)=>
+    `<div class="qitem" data-i="${i}"><span class="idx">${i+1}/${queue.length}</span>
+     <span class="txt">${q.prompt.replace(/</g,"&lt;")}</span>
+     <span class="st">queued</span></div>`).join("");
+  $("log").innerHTML=""; $("stDone").textContent="0";
+  $("stPer").textContent="—"; $("stStep").textContent="—";
+
+  running=true; batchStart=performance.now();
+  show("scRun");
+  log(`Batch started — ${queue.length} clip${queue.length===1?"":"s"} at ${c.w}×${c.h}, ${c.frames}f, ${c.steps} steps`);
+  if(!calib.measured) log("No baseline yet — this first run measures your machine. Estimates get accurate after it.","");
+  runClip(0);
+};
+
+$("btnStop").onclick = ()=>{ stopAfter=true; log("Will stop after the current clip finishes."); };
+$("btnAbort").onclick = async ()=>{
+  stopAfter=true;
+  try{ await fetch(`${COMFY}/interrupt`,{method:"POST"}); }catch(e){}
+  log("Aborted.","e"); finish();
+};
+
+// ---------- boot ----------
+$("calibNote").innerHTML = calib.measured
+  ? `Calibrated to your machine: about <b>${fmt(estimateClip(432,768,33,4,false))}</b> per 2-second clip at the default settings.`
+  : `Not calibrated yet — your first run will measure the real speed of this PC, and every estimate after it will be accurate.`;
+setConn("","connecting…");
+connect();
+</script>
+</body>
+</html>
