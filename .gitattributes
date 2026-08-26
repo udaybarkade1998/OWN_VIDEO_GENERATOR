@@ -1,0 +1,18 @@
+# Default: let git normalise text in the repo
+* text=auto eol=lf
+
+# Shell scripts MUST stay LF. With CRLF, macOS and Linux fail with
+# "bad interpreter: /usr/bin/env bash^M".
+*.sh    text eol=lf
+run.sh  text eol=lf
+
+# Windows batch files must stay CRLF or cmd.exe mis-parses them
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Never touch binaries
+*.safetensors binary
+*.gguf        binary
+*.mp4         binary
+*.webm        binary
+*.png         binary
