@@ -33,6 +33,24 @@ Exact 9:16, no crop, ready to upload.
 3. **[prompts/prompt_pack.md](prompts/prompt_pack.md)** — prompts written around what
    this model is actually good at.
 
+## The UI
+
+`ui/index.html` is a self-contained control panel that drives ComfyUI over its HTTP +
+WebSocket API. No backend, no Python packages, nothing to install.
+
+- **Click Generate** -> choose **Single prompt** or **Script** (one clip per line)
+- Pick resolution / frames / steps / variations-per-line - it shows the token cost and
+  a total time estimate before you commit
+- **Live progress**: current phase (loading -> encoding -> sampling -> decoding ->
+  saving), step counter, per-clip bar, batch bar, measured seconds-per-step, and a
+  remaining-time countdown that recalculates from the real step rate
+- Results gallery with inline 9:16 playback
+
+**On timing:** nothing can know how long a run takes before it has measured your
+machine. The first run says *rough* and measures it; every estimate after that is
+calibrated to your actual hardware and stored in the browser. Estimates scale by token
+count, so they stay valid when you change resolution or frame count.
+
 ## Quick version
 
 ```powershell
@@ -44,10 +62,14 @@ Exact 9:16, no crop, ready to upload.
 # 3. Download the models (~7.3 GB, resumable)
 powershell -ExecutionPolicy Bypass -File scripts\download_models.ps1 -ComfyRoot "D:\ComfyUI\ComfyUI_windows_portable\ComfyUI"
 
-# 4. Edit COMFY_PORTABLE and RESERVE at the top of scripts\run_comfyui.bat, then run it
-scripts\run_comfyui.bat
+# 4. Edit COMFY_PORTABLE and RESERVE at the top of scripts\run_comfyui.bat
+#    (also set COMFY_PORTABLE in scripts\run_ui.bat)
 
-# 5. Drag workflows\wan21_1.3b_shorts_432x768.json onto the canvas, prompt, Run
+# 5. One click: starts ComfyUI, waits for it, opens the UI at 127.0.0.1:8189
+scripts\start_all.bat
+
+#    ...or drive ComfyUI directly instead: drag
+#    workflows\wan21_1.3b_shorts_432x768.json onto its canvas at 127.0.0.1:8188
 
 # 6. Finish the clip for Shorts (CPU only - queue the next one while this encodes)
 scripts\finish_short.bat "D:\ComfyUI\...\output\short_00001.webm"
