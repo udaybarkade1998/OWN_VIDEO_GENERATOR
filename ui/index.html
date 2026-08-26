@@ -140,6 +140,14 @@
   .mode.soon:hover{border-color:var(--line);background:var(--panel2);transform:none}
   .mode .tag.soon{background:rgba(139,148,167,.16);color:var(--dim)}
   .mode .sz2{font-size:11.5px;color:var(--dim);margin-top:8px}
+  .pickstrip{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 10px}
+  .pickstrip .pk{flex:none;width:92px;border-radius:8px;overflow:hidden;cursor:pointer;
+    border:2px solid transparent;background:var(--panel2);transition:.15s}
+  .pickstrip .pk img{width:100%;display:block;aspect-ratio:2/3;object-fit:cover;background:#000}
+  .pickstrip .pk:hover{border-color:var(--accent)}
+  .pickstrip .pk.on{border-color:var(--accent2)}
+  .pickstrip .pk .n{font-size:9.5px;color:var(--dim);padding:4px 5px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .sect{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;
     margin:26px 0 12px;font-weight:600}
   .stages{margin:16px 0 4px}
@@ -259,6 +267,47 @@ Vertical macro of dew on a spiderweb, camera drifting right, golden backlight
 # lines starting with # are ignored"></textarea>
         <p class="hint">One clip per line. Blank lines and <code>#</code> comments are skipped.</p>
       </div>
+    </div>
+
+    <div class="card hidden" id="setSource">
+      <h2>Source image <span class="spacer"></span>
+        <button class="tiny" id="srcRefresh">Refresh</button></h2>
+      <div class="pickstrip" id="srcStrip"></div>
+      <p class="hint" id="srcNote">Pick the still you want to bring to life.
+        Anything in your output folder shows up here.</p>
+    </div>
+
+    <div class="card hidden" id="setI2V">
+      <h2>Settings &mdash; animation</h2>
+      <div class="grid">
+        <div><label>Resolution</label>
+          <select id="vRes">
+            <option value="432x648">432&times;648 &mdash; fastest</option>
+            <option value="480x720" selected>480&times;720 &mdash; matches SDXL 2:3 &#9733;</option>
+            <option value="512x768">512&times;768 &mdash; sharper, heavier</option>
+          </select></div>
+        <div><label>Frames (16fps)</label>
+          <select id="vFrames">
+            <option value="17">17 &mdash; 1.1 s (3&times; cheaper)</option>
+            <option value="25">25 &mdash; 1.6 s</option>
+            <option value="33" selected>33 &mdash; 2.1 s &#9733;</option>
+            <option value="49">49 &mdash; 3.1 s</option>
+          </select></div>
+        <div><label>Steps</label>
+          <select id="vSteps">
+            <option value="6" selected>6 &#9733;</option>
+            <option value="4">4 &mdash; fastest</option>
+            <option value="8">8 &mdash; most detail</option>
+          </select></div>
+        <div><label>Variations</label>
+          <select id="vVar">
+            <option value="1" selected>1</option><option value="2">2</option>
+            <option value="3">3</option>
+          </select></div>
+      </div>
+      <p class="hint">The image is centre-cropped to this ratio first, so keep it close
+        to the source. Describe <b>the motion you want</b> in the prompt &mdash; the
+        subject already exists in the picture.</p>
     </div>
 
     <div class="card hidden" id="setImage">
@@ -489,9 +538,49 @@ const ISTAGES=[
 ];
 const INODE2STAGE={}; ISTAGES.forEach((s,i)=>s.nodes.forEach(n=>INODE2STAGE[n]=i));
 const IPHASES={}; ISTAGES.forEach(s=>s.nodes.forEach(n=>IPHASES[n]=s.name));
-const stagesFor=()=>MODE==="image"?ISTAGES:STAGES;
-const nodeMapFor=()=>MODE==="image"?INODE2STAGE:NODE2STAGE;
-const phaseFor=()=>MODE==="image"?IPHASES:PHASES;
+const VSTAGES=[
+ {id:"queue", name:"Queued",               nodes:[],              why:"Waiting for ComfyUI to pick up the job."},
+ {id:"model", name:"Loading animator",     nodes:["37","100","101"], why:"Wan Fun InP, 3.1 GB into VRAM."},
+ {id:"text",  name:"Loading text encoder", nodes:["38"],          why:"Slow on the first clip of a session, cached after."},
+ {id:"enc",   name:"Reading your prompt",  nodes:["6","7"],       why:"Runs on the CPU - the GPU idles here, which is normal."},
+ {id:"img",   name:"Reading your image",   nodes:["20","21","22","23","24","39"], why:""},
+ {id:"samp",  name:"Animating",            nodes:["3"],           why:"The GPU-heavy part."},
+ {id:"dec",   name:"Building the video",   nodes:["8"],           why:""},
+ {id:"save",  name:"Saving clip",          nodes:["47"],          why:""},
+];
+const VNODE2STAGE={}; VSTAGES.forEach((s,i)=>s.nodes.forEach(n=>VNODE2STAGE[n]=i));
+const VPHASES={}; VSTAGES.forEach(s=>s.nodes.forEach(n=>VPHASES[n]=s.name));
+
+let srcImage=null;      // {filename, subfolder}
+
+function buildI2VPrompt(o){return{
+ "37":{class_type:"UNETLoader",inputs:{unet_name:"wan2.1_fun_inp_1.3B_bf16.safetensors",weight_dtype:"default"}},
+ "100":{class_type:"LoraLoaderModelOnly",inputs:{model:["37",0],
+     lora_name:"Wan2_1_self_forcing_dmd_1_3B_lora_rank_32_fp16.safetensors",strength_model:1.0}},
+ "101":{class_type:"ModelSamplingSD3",inputs:{model:["100",0],shift:5.0}},
+ "38":{class_type:"CLIPLoaderGGUF",inputs:{clip_name:"umt5-xxl-encoder-Q5_K_M.gguf",type:"wan"}},
+ "6":{class_type:"CLIPTextEncode",inputs:{clip:["38",0],text:o.prompt}},
+ "7":{class_type:"CLIPTextEncode",inputs:{clip:["38",0],text:NEG}},
+ "20":{class_type:"LoadImageOutput",inputs:{image:o.image}},
+ "21":{class_type:"ImageScale",inputs:{image:["20",0],upscale_method:"lanczos",
+     width:o.w,height:o.h,crop:"center"}},
+ "22":{class_type:"CLIPVisionLoader",inputs:{clip_name:"clip_vision_h.safetensors"}},
+ "23":{class_type:"CLIPVisionEncode",inputs:{clip_vision:["22",0],image:["21",0],crop:"center"}},
+ "39":{class_type:"VAELoader",inputs:{vae_name:"wan_2.1_vae.safetensors"}},
+ "24":{class_type:"WanFunInpaintToVideo",inputs:{positive:["6",0],negative:["7",0],vae:["39",0],
+     width:o.w,height:o.h,length:o.frames,batch_size:1,
+     clip_vision_output:["23",0],start_image:["21",0]}},
+ "3":{class_type:"KSampler",inputs:{model:["101",0],positive:["24",0],negative:["24",1],
+     latent_image:["24",2],seed:o.seed,steps:o.steps,cfg:1.0,
+     sampler_name:"lcm",scheduler:"simple",denoise:1.0}},
+ "8":{class_type:"VAEDecodeTiled",inputs:{samples:["3",0],vae:["39",0],
+     tile_size:256,overlap:64,temporal_size:8,temporal_overlap:4}},
+ "47":{class_type:"SaveWEBM",inputs:{images:["8",0],filename_prefix:"animated",codec:"vp9",fps:16,crf:18}}
+};}
+
+const stagesFor=()=>MODE==="image"?ISTAGES:(MODE==="i2v"?VSTAGES:STAGES);
+const nodeMapFor=()=>MODE==="image"?INODE2STAGE:(MODE==="i2v"?VNODE2STAGE:NODE2STAGE);
+const phaseFor=()=>MODE==="image"?IPHASES:(MODE==="i2v"?VPHASES:PHASES);
 
 const INEG="blurry, low quality, worst quality, jpeg artifacts, watermark, text, logo, "
  +"signature, deformed, disfigured, extra limbs, bad hands, bad anatomy, oversaturated, "
@@ -577,11 +666,13 @@ const MODES=[
  {id:"image", icon:"&#128444;", name:"Text "+ARROW+" Image", status:"ready",
   desc:"Stills at SDXL's native 832&times;1216, cropped to 9:16 for Shorts. "
       +"Under a minute each."},
+ {id:"i2v", icon:"&#127902;", name:"Image "+ARROW+" Video", status:"ready",
+  desc:"Animate a still you already made. Keeps SDXL's detail and adds motion, "
+      +"instead of asking Wan to invent the scene at 432px."},
 
- {id:"i2v", icon:"&#127902;", name:"Image "+ARROW+" Video", status:"soon",
-  size:"4.4 GB", model:"Wan 2.1 Fun InP 1.3B + CLIP-Vision H",
-  desc:"Animate a still you already like, instead of hoping Wan draws it well at "
-      +"432px. The biggest quality win left."},
+ {id:"i2v", icon:"&#127902;", name:"Image "+ARROW+" Video", status:"ready",
+  desc:"Animate a still you already made. Keeps SDXL's detail and adds motion, "
+      +"instead of asking Wan to invent the scene at 432px."},
  {id:"upscale", icon:"&#128269;", name:"Upscale", status:"soon",
   size:"70 MB", model:"Real-ESRGAN x4plus",
   desc:"A detail-aware upscaler for the 1080&times;1920 step, replacing the plain "
@@ -777,6 +868,9 @@ function infoOf(e){
     if(p["40"]&&p["6"])   // video graph
       return {txt:p["6"].inputs.text,
         cfg:`${p["40"].inputs.width}×${p["40"].inputs.height} · ${p["40"].inputs.length}f · ${p["3"].inputs.steps}st`};
+    if(p["24"]&&p["6"])   // image-to-video graph
+      return {txt:p["6"].inputs.text,
+        cfg:`${p["24"].inputs.width}×${p["24"].inputs.height} · ${p["24"].inputs.length}f · anim`};
     if(p["5"]&&p["3"])    // image graph
       return {txt:p["3"].inputs.text,
         cfg:`${p["5"].inputs.width}×${p["5"].inputs.height} · ${p["6"].inputs.steps}st`};
@@ -842,7 +936,8 @@ $("btnClearQ").onclick=async()=>{
 async function submit(item){
   const r=await fetch(`${COMFY}/prompt`,{method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({prompt:(MODE==="image"?buildImagePrompt(item):buildPrompt(item)),
+    body:JSON.stringify({prompt:(MODE==="image"?buildImagePrompt(item)
+        :MODE==="i2v"?buildI2VPrompt(item):buildPrompt(item)),
       client_id:CLIENT_ID})});
   if(!r.ok){const t=await r.text();
     throw new Error(`ComfyUI rejected the job (${r.status}). ${t.slice(0,300)}`);}
@@ -931,6 +1026,10 @@ function finish(){
 
 // ---------- estimate ----------
 function currentCfg(){
+  if(MODE==="i2v"){
+    const [w,h]=$("vRes").value.split("x").map(Number);
+    return {w,h,frames:+$("vFrames").value,steps:+$("vSteps").value,vars:+$("vVar").value};
+  }
   if(MODE==="image"){
     const [w,h]=$("iRes").value.split("x").map(Number);
     return {w,h,frames:1,steps:+$("iSteps").value,vars:+$("iVar").value};
@@ -964,14 +1063,19 @@ function applyMode(m){
   MODE=m;
   try{ localStorage.setItem("ovg_mode",m); }catch(e){}
   $("setImage").classList.toggle("hidden",m!=="image");
-  $("setVideo").classList.toggle("hidden",m==="image");
+  $("setI2V").classList.toggle("hidden",m!=="i2v");
+  $("setSource").classList.toggle("hidden",m!=="i2v");
+  $("setVideo").classList.toggle("hidden",m!=="video");
+  if(m==="i2v") loadSources();
   $("setupMode").textContent=m;
-  $("idleMode").textContent=(m==="image"?"Image":"Video")+" mode";
+  $("idleMode").textContent=(m==="image"?"Image":m==="i2v"?"Animate":"Video")+" mode";
   $("kPer").textContent = m==="image" ? "Per image" : "Per clip";
   $("btnStop").textContent = m==="image"
     ? "Stop after current image" : "Stop after current clip";
   document.querySelectorAll("header .sub")[0].textContent =
-    m==="image" ? "SDXL Lightning · 9:16 stills" : "Wan 2.1 1.3B · 9:16 Shorts";
+    m==="image" ? "SDXL Lightning · 9:16 stills"
+    : m==="i2v" ? "Wan Fun InP · animate a still"
+    : "Wan 2.1 1.3B · 9:16 Shorts";
   const ck=m==="image"?icalib:calib;
   $("calibNote").innerHTML=ck.measured
     ? `Calibrated: about <b>${fmt(m==="image"
@@ -996,7 +1100,7 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   $("paneText").classList.toggle("hidden",mode!=="text");
   $("paneScript").classList.toggle("hidden",mode!=="script");
   refreshEstimate();});
-["selRes","selFrames","selSteps","selVar","iRes","iSteps","iVar"]
+["selRes","selFrames","selSteps","selVar","iRes","iSteps","iVar","vRes","vFrames","vSteps","vVar"]
   .forEach(id=>{const e=$(id); if(e) e.onchange=refreshEstimate;});
 $("txtPrompt").oninput=refreshEstimate; $("txtScript").oninput=refreshEstimate;
 $("btnCopyPath").onclick=()=>navigator.clipboard.writeText(outputDir||"")
@@ -1004,10 +1108,12 @@ $("btnCopyPath").onclick=()=>navigator.clipboard.writeText(outputDir||"")
     setTimeout(()=>$("btnCopyPath").textContent="Copy",1400);});
 $("btnStart").onclick=()=>{
   const ls=lines(); if(!ls.length){alert("Enter a prompt first.");return;}
+  if(MODE==="i2v" && !srcImage){alert("Pick a source image first.");return;}
   const c=currentCfg();
   queue=[];finished=[];doneCount=0;stopAfter=false;
   ls.forEach(p=>{for(let v=0;v<c.vars;v++)
     queue.push({prompt:p,w:c.w,h:c.h,frames:c.frames,steps:c.steps,
+      image:srcImage?((srcImage.subfolder?srcImage.subfolder+"/":"")+srcImage.filename):null,
       seed:Math.floor(Math.random()*2**31)});});
   $("log").innerHTML=""; $("stDone").textContent="0";
   $("stPer").textContent="—"; $("stStep").textContent="—";
@@ -1019,6 +1125,32 @@ $("btnStart").onclick=()=>{
   runClip(0);
 };
 $("btnStop").onclick=()=>{stopAfter=true;log(`Will stop after the current ${MODE==="image"?"image":"clip"} finishes.`,"w");};
+
+// ---------- source image picker (i2v) ----------
+async function loadSources(){
+  try{
+    const d=await (await fetch("/api/gallery?kind=image&limit=60",{cache:"no-store"})).json();
+    if(!d.items.length){
+      $("srcStrip").innerHTML="";
+      $("srcNote").innerHTML='<span style="color:var(--warn)">No images yet. '
+        +'Switch to Image mode and make one first.</span>';
+      return;
+    }
+    $("srcStrip").innerHTML=d.items.map((it,i)=>`
+      <div class="pk" data-src="${i}"><img src="${viewURL(it)}" loading="lazy" alt="">
+        <div class="n">${esc(it.filename)}</div></div>`).join("");
+    window.__srcItems=d.items;
+    $("srcStrip").querySelectorAll("[data-src]").forEach(el=>el.onclick=()=>{
+      $("srcStrip").querySelectorAll(".pk").forEach(x=>x.classList.remove("on"));
+      el.classList.add("on");
+      srcImage=window.__srcItems[+el.dataset.src];
+      $("srcNote").textContent="Using "+srcImage.filename;
+      refreshEstimate();
+    });
+    if(!srcImage){ $("srcStrip").querySelector(".pk").click(); }
+  }catch(e){ $("srcNote").textContent="Could not list images: "+e.message; }
+}
+$("srcRefresh").onclick=loadSources;
 
 // ---------- gallery ----------
 let galKind="all", galItems=[], galSel=new Set();

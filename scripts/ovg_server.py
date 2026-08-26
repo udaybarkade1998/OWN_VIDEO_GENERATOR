@@ -107,7 +107,30 @@ IMAGE_MODELS = [
     },
 ]
 
-MODEL_SETS = {"video": VIDEO_MODELS, "image": IMAGE_MODELS}
+# Image -> Video reuses the text encoder, VAE and speed LoRA already pulled for
+# video mode, so picking it after video only costs the two new files.
+I2V_MODELS = [
+    {
+        "key": "i2v_unet",
+        "name": "wan2.1_fun_inp_1.3B_bf16.safetensors",
+        "subdir": "diffusion_models",
+        "size": 3128957992,
+        "what": "Wan 2.1 Fun InP 1.3B - animates a still image",
+        "url": f"{HF}/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/"
+               "split_files/diffusion_models/wan2.1_fun_inp_1.3B_bf16.safetensors",
+    },
+    {
+        "key": "clip_vision",
+        "name": "clip_vision_h.safetensors",
+        "subdir": "clip_vision",
+        "size": 1264219396,
+        "what": "CLIP-Vision H - reads the input image",
+        "url": f"{HF}/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/"
+               "split_files/clip_vision/clip_vision_h.safetensors",
+    },
+] + [m for m in VIDEO_MODELS if m["key"] in ("clip", "vae", "lora_dmd")]
+
+MODEL_SETS = {"video": VIDEO_MODELS, "image": IMAGE_MODELS, "i2v": I2V_MODELS}
 
 
 def models_for(mode):

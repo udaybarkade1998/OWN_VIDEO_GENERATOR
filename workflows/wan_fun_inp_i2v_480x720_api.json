@@ -1,0 +1,188 @@
+{
+  "37": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.1_fun_inp_1.3B_bf16.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "100": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "37",
+        0
+      ],
+      "lora_name": "Wan2_1_self_forcing_dmd_1_3B_lora_rank_32_fp16.safetensors",
+      "strength_model": 1.0
+    }
+  },
+  "101": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "model": [
+        "100",
+        0
+      ],
+      "shift": 5.0
+    }
+  },
+  "38": {
+    "class_type": "CLIPLoaderGGUF",
+    "inputs": {
+      "clip_name": "umt5-xxl-encoder-Q5_K_M.gguf",
+      "type": "wan"
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "38",
+        0
+      ],
+      "text": "PROMPT"
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "38",
+        0
+      ],
+      "text": "NEGATIVE"
+    }
+  },
+  "20": {
+    "class_type": "LoadImageOutput",
+    "inputs": {
+      "image": "image_00001_.png"
+    }
+  },
+  "21": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "20",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 480,
+      "height": 720,
+      "crop": "center"
+    }
+  },
+  "22": {
+    "class_type": "CLIPVisionLoader",
+    "inputs": {
+      "clip_name": "clip_vision_h.safetensors"
+    }
+  },
+  "23": {
+    "class_type": "CLIPVisionEncode",
+    "inputs": {
+      "clip_vision": [
+        "22",
+        0
+      ],
+      "image": [
+        "21",
+        0
+      ],
+      "crop": "center"
+    }
+  },
+  "39": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    }
+  },
+  "24": {
+    "class_type": "WanFunInpaintToVideo",
+    "inputs": {
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "vae": [
+        "39",
+        0
+      ],
+      "width": 480,
+      "height": 720,
+      "length": 33,
+      "batch_size": 1,
+      "clip_vision_output": [
+        "23",
+        0
+      ],
+      "start_image": [
+        "21",
+        0
+      ]
+    }
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "101",
+        0
+      ],
+      "positive": [
+        "24",
+        0
+      ],
+      "negative": [
+        "24",
+        1
+      ],
+      "latent_image": [
+        "24",
+        2
+      ],
+      "seed": 0,
+      "steps": 6,
+      "cfg": 1.0,
+      "sampler_name": "lcm",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "8": {
+    "class_type": "VAEDecodeTiled",
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "39",
+        0
+      ],
+      "tile_size": 256,
+      "overlap": 64,
+      "temporal_size": 8,
+      "temporal_overlap": 4
+    }
+  },
+  "47": {
+    "class_type": "SaveWEBM",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "filename_prefix": "animated",
+      "codec": "vp9",
+      "fps": 16,
+      "crf": 18
+    }
+  }
+}
