@@ -1,0 +1,12 @@
+# Never commit model weights or renders
+*.safetensors
+*.gguf
+*.ckpt
+*.pth
+*.bin
+*.mp4
+*.webm
+*.webp
+output/
+models/
+ComfyUI_windows_portable/
