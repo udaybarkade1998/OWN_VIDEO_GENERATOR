@@ -107,6 +107,17 @@
   .pathbox{display:flex;align-items:center;gap:10px;background:var(--bg);
     border:1px solid var(--line);border-radius:8px;padding:10px 13px;margin-top:6px}
   .pathbox code{background:none;padding:0;flex:1;font-size:12.5px}
+  .modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+  .mode{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:22px;
+    cursor:pointer;transition:.15s;text-align:left}
+  .mode:hover{border-color:var(--accent);background:#242936;transform:translateY(-2px)}
+  .mode .big{font-size:32px;margin-bottom:10px}
+  .mode h3{margin:0 0 6px;font-size:17px}
+  .mode p{margin:0;font-size:13px;color:var(--dim);line-height:1.55}
+  .mode .tag{display:inline-block;margin-top:12px;font-size:11.5px;padding:3px 10px;
+    border-radius:99px;background:var(--bg);color:var(--dim)}
+  .mode .tag.ready{background:rgba(62,224,143,.15);color:var(--accent2)}
+  .mode .tag.need{background:rgba(255,176,32,.15);color:var(--warn)}
   .stages{margin:16px 0 4px}
   .sg{display:flex;align-items:center;gap:11px;padding:8px 11px;border-radius:8px;
     font-size:13.5px;color:var(--dim);transition:.2s}
@@ -146,10 +157,35 @@
       (without it every clip renders one frame then blanks).</div>
   </div>
 
+  <!-- ===================== HOME ===================== -->
+  <section id="scHome">
+    <div class="card">
+      <h2>What do you want to make?</h2>
+      <div class="modes">
+        <div class="mode" data-pick="video">
+          <div class="big">🎬</div>
+          <h3>Video</h3>
+          <p>2-second 9:16 clips with real motion. Wan 2.1 1.3B at 432×768.
+             Roughly 5 minutes per clip on this PC.</p>
+          <span class="tag" id="tagVideo">checking…</span>
+        </div>
+        <div class="mode" data-pick="image">
+          <div class="big">🖼️</div>
+          <h3>Image</h3>
+          <p>Still 9:16 images at 720×1280. SDXL with a 4-step Lightning LoRA.
+             Far faster than video — well under a minute each.</p>
+          <span class="tag" id="tagImage">checking…</span>
+        </div>
+      </div>
+      <p class="hint">Each mode downloads its own models the first time you pick it.
+        Video needs 7.3 GB, images 7.7 GB — you only need the one you use.</p>
+    </div>
+  </section>
+
   <!-- ===================== SETUP ===================== -->
   <section id="scSetup" class="hidden">
     <div class="card">
-      <h2>Setup — models required</h2>
+      <h2>Setup — <span id="setupMode">video</span> models required</h2>
       <div class="banner info">
         <span>ℹ</span>
         <div>Model weights aren't shipped with this project — they're 7.3 GB and belong to
@@ -171,6 +207,7 @@
 
       <div style="margin-top:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         <button class="primary" id="btnDownload">Download models</button>
+        <button id="btnSetupBack">Back</button>
         <span class="hint" id="dlNote" style="margin:0"></span>
       </div>
       <p class="hint">Downloads use 16 parallel connections — HuggingFace throttles single
@@ -181,8 +218,11 @@
   <!-- ===================== IDLE ===================== -->
   <section id="scIdle" class="hidden">
     <div class="card center">
+      <div style="font-size:12px;color:var(--dim);text-transform:uppercase;
+        letter-spacing:.6px;margin-bottom:14px" id="idleMode">Video mode</div>
       <button class="primary big" id="btnGenerate">Generate</button>
       <p class="hint" id="calibNote" style="margin-top:15px"></p>
+      <p style="margin-top:14px"><button class="tiny" id="btnSwitchMode">Switch mode</button></p>
     </div>
   </section>
 
@@ -208,8 +248,33 @@ Vertical macro of dew on a spiderweb, camera drifting right, golden backlight
       </div>
     </div>
 
-    <div class="card">
-      <h2>Settings</h2>
+    <div class="card hidden" id="setImage">
+      <h2>Settings — image</h2>
+      <div class="grid">
+        <div><label>Resolution</label>
+          <select id="iRes">
+            <option value="576x1024">576×1024 — fastest</option>
+            <option value="720x1280" selected>720×1280 — exact 9:16 ★</option>
+            <option value="832x1216">832×1216 — SDXL native bucket</option>
+          </select></div>
+        <div><label>Steps</label>
+          <select id="iSteps">
+            <option value="4" selected>4 — Lightning ★</option>
+            <option value="6">6</option>
+            <option value="8">8 — most detail</option>
+          </select></div>
+        <div><label>Images per prompt</label>
+          <select id="iVar">
+            <option value="1" selected>1</option><option value="2">2</option>
+            <option value="4">4 — pick the best</option>
+          </select></div>
+      </div>
+      <p class="hint">SDXL is trained around 1 megapixel. 720×1280 is exact 9:16 and
+        upscales ×1.5 to 1080×1920.</p>
+    </div>
+
+    <div class="card" id="setVideo">
+      <h2>Settings — video</h2>
       <div class="grid">
         <div><label>Resolution</label>
           <select id="selRes">
@@ -371,13 +436,48 @@ const STAGES=[
 ];
 const NODE2STAGE={}; STAGES.forEach((s,i)=>s.nodes.forEach(n=>NODE2STAGE[n]=i));
 const PHASES={}; STAGES.forEach(s=>s.nodes.forEach(n=>PHASES[n]=s.name));
+
+// Image mode has its own, much shorter pipeline.
+const ISTAGES=[
+ {id:"queue", name:"Queued",              nodes:[],       why:"Waiting for ComfyUI to pick up the job."},
+ {id:"model", name:"Loading SDXL",        nodes:["1","2"],why:"6.9 GB checkpoint. Slow on the first image of a session, cached after."},
+ {id:"enc",   name:"Reading your prompt", nodes:["3","4"],why:""},
+ {id:"samp",  name:"Generating image",    nodes:["6","5"],why:"The GPU-heavy part."},
+ {id:"dec",   name:"Building the picture",nodes:["8","7"],why:""},
+ {id:"save",  name:"Saving image",        nodes:["9"],    why:""},
+];
+const INODE2STAGE={}; ISTAGES.forEach((s,i)=>s.nodes.forEach(n=>INODE2STAGE[n]=i));
+const IPHASES={}; ISTAGES.forEach(s=>s.nodes.forEach(n=>IPHASES[n]=s.name));
+const stagesFor=()=>MODE==="image"?ISTAGES:STAGES;
+const nodeMapFor=()=>MODE==="image"?INODE2STAGE:NODE2STAGE;
+const phaseFor=()=>MODE==="image"?IPHASES:PHASES;
+
+const INEG="blurry, low quality, worst quality, jpeg artifacts, watermark, text, logo, "
+ +"signature, deformed, disfigured, extra limbs, bad hands, bad anatomy, oversaturated, "
+ +"lowres, cropped, out of frame";
+
+function buildImagePrompt(o){return{
+ "1":{class_type:"CheckpointLoaderSimple",inputs:{ckpt_name:"sd_xl_base_1.0.safetensors"}},
+ "2":{class_type:"LoraLoader",inputs:{model:["1",0],clip:["1",1],
+     lora_name:"sdxl_lightning_4step_lora.safetensors",strength_model:1.0,strength_clip:1.0}},
+ "3":{class_type:"CLIPTextEncode",inputs:{clip:["2",1],text:o.prompt}},
+ "4":{class_type:"CLIPTextEncode",inputs:{clip:["2",1],text:INEG}},
+ "5":{class_type:"EmptyLatentImage",inputs:{width:o.w,height:o.h,batch_size:1}},
+ "6":{class_type:"KSampler",inputs:{model:["2",0],positive:["3",0],negative:["4",0],
+     latent_image:["5",0],seed:o.seed,steps:o.steps,cfg:1.0,
+     sampler_name:"euler",scheduler:"sgm_uniform",denoise:1.0}},
+ "7":{class_type:"VAELoader",inputs:{vae_name:"sdxl_vae.safetensors"}},
+ "8":{class_type:"VAEDecode",inputs:{samples:["6",0],vae:["7",0]}},
+ "9":{class_type:"SaveImage",inputs:{images:["8",0],filename_prefix:"image"}}
+};}
 let stageIdx=0, stageStart=0, stageTimes={};
 function setStage(i){
   if(i<=stageIdx && stageStart) return;
   const now=performance.now();
-  if(stageStart) stageTimes[STAGES[stageIdx].id]=(now-stageStart)/1000;
+  const SS=stagesFor();
+  if(stageStart) stageTimes[SS[stageIdx].id]=(now-stageStart)/1000;
   stageIdx=i; stageStart=now; renderStages();
-  const det = STAGES[i].id==="samp";
+  const det = SS[i].id==="samp";
   $("wrapDet").classList.toggle("hidden",!det);
   $("wrapIndet").classList.toggle("hidden",det);
 }
@@ -388,7 +488,7 @@ function resetStages(){
 }
 function renderStages(){
   const el=$("stages"); if(!el)return;
-  el.innerHTML=STAGES.map((s,i)=>{
+  el.innerHTML=stagesFor().map((s,i)=>{
     const st=i<stageIdx?"done":(i===stageIdx?"now":"");
     const ic=i<stageIdx?"✓":(i===stageIdx?"●":"○");
     let t="";
@@ -406,6 +506,11 @@ function loadCalib(){try{const c=JSON.parse(localStorage.getItem("ovg_calib"));
   if(c&&c.stepPerMTok)return c;}catch(e){} return {...DEFAULT_CALIB};}
 function saveCalib(c){try{localStorage.setItem("ovg_calib",JSON.stringify(c));}catch(e){}}
 let calib=loadCalib();
+const DEFAULT_ICALIB={stepPerMPx:9,decPerMPx:14,loadSec:110,measured:false};
+function loadICalib(){try{const c=JSON.parse(localStorage.getItem("ovg_icalib"));
+  if(c&&c.stepPerMPx)return c;}catch(e){} return {...DEFAULT_ICALIB};}
+let icalib=loadICalib();
+function saveICalib(c){try{localStorage.setItem("ovg_icalib",JSON.stringify(c));}catch(e){}}
 const tokensOf=(w,h,f)=>(w/16)*(h/16)*(((f-1)/4)+1);
 function estimateClip(w,h,f,steps,withLoad){const mt=tokensOf(w,h,f)/1e6;
   return steps*calib.stepPerMTok*mt + calib.decPerMTok*mt + (withLoad?calib.loadSec:0);}
@@ -417,6 +522,7 @@ function human(b){const u=["B","KB","MB","GB"];let i=0;
   while(b>=1024&&i<3){b/=1024;i++;} return b.toFixed(i>=2?1:0)+" "+u[i];}
 
 // ---------- state ----------
+let MODE="video";           // "video" | "image"
 let mode="text", queue=[], qi=-1, running=false, stopAfter=false;
 let curPromptId=null, clipStart=0, batchStart=0, sampStart=0, secPerStep=0, doneCount=0;
 let curSteps=0, curTokensM=0, lastPhaseNode=null, finished=[], outputDir="";
@@ -427,7 +533,7 @@ function log(msg,cls){const l=$("log");if(!l)return;
   l.insertAdjacentHTML("beforeend",
     `<div><span style="opacity:.5">${t}</span> <span class="${cls||""}">${msg}</span></div>`);
   l.scrollTop=l.scrollHeight;}
-function show(id){["scSetup","scIdle","scInput","scRun","scDone"]
+function show(id){["scHome","scSetup","scIdle","scInput","scRun","scDone"]
   .forEach(s=>$(s).classList.toggle("hidden",s!==id));}
 const esc=s=>String(s).replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
 
@@ -435,13 +541,21 @@ const esc=s=>String(s).replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",
 let setupDone=false;
 async function pollHelper(){
   try{
-    const d=await (await fetch("/api/status",{cache:"no-store"})).json();
+    const d=await (await fetch(`/api/status?mode=${MODE}`,{cache:"no-store"})).json();
     $("dotHelper").className="dot ok"; $("helperTxt").textContent="helper ready";
     outputDir=d.output_dir; $("outPath").textContent=d.output_dir;
+    if(d.ready){
+      for(const k of ["video","image"]){
+        const el=$("tag"+k[0].toUpperCase()+k.slice(1)); if(!el)continue;
+        el.className="tag "+(d.ready[k]?"ready":"need");
+        el.textContent=d.ready[k]?"models ready"
+          :`needs ${human(d.sizes[k])} download`;
+      }
+    }
     renderModels(d);
     if(d.download&&(d.download.active||d.download.error)) renderDownload(d);
-    if(d.all_present&&!setupDone&&!$("scSetup").classList.contains("hidden")){
-      setupDone=true; show("scIdle");
+    if(d.all_present&&!$("scSetup").classList.contains("hidden")){
+      show("scIdle");
     }
     return d;
   }catch(e){
@@ -492,7 +606,7 @@ function renderDownload(d){
 }
 $("btnDownload").onclick=async()=>{
   $("btnDownload").disabled=true; $("btnDownload").textContent="Starting…";
-  try{ await fetch("/api/download",{method:"POST"}); setTimeout(pollHelper,400); }
+  try{ await fetch(`/api/download?mode=${MODE}`,{method:"POST"}); setTimeout(pollHelper,400); }
   catch(e){ alert("Could not start download: "+e.message);
     $("btnDownload").disabled=false; $("btnDownload").textContent="Download models"; }
 };
@@ -520,11 +634,11 @@ function handle(m){
     if(d.node===null && d.prompt_id===curPromptId){ clipFinished(); return; }
     if(d.node && d.node!==lastPhaseNode){
       lastPhaseNode=d.node;
-      const si=NODE2STAGE[d.node];
+      const si=nodeMapFor()[d.node];
       if(si!=null) setStage(si);
-      $("phaseLbl").textContent=PHASES[d.node]||("Node "+d.node);
-      if(d.node==="3") sampStart=performance.now();
-      if(d.node==="8") log("Frames done — building the video…");
+      $("phaseLbl").textContent=phaseFor()[d.node]||("Node "+d.node);
+      if(d.node===(MODE==="image"?"6":"3")) sampStart=performance.now();
+      if(MODE!=="image" && d.node==="8") log("Frames done — building the video…");
     }
   } else if(m.type==="progress"){
     const v=d.value||0, mx=d.max||1, pct=Math.min(100,v/mx*100);
@@ -569,8 +683,13 @@ requestAnimationFrame(tick);
 function infoOf(e){
   try{
     const p=e[2];
-    return {txt:p["6"].inputs.text,
-      cfg:`${p["40"].inputs.width}×${p["40"].inputs.height} · ${p["40"].inputs.length}f · ${p["3"].inputs.steps}st`};
+    if(p["40"]&&p["6"])   // video graph
+      return {txt:p["6"].inputs.text,
+        cfg:`${p["40"].inputs.width}×${p["40"].inputs.height} · ${p["40"].inputs.length}f · ${p["3"].inputs.steps}st`};
+    if(p["5"]&&p["3"])    // image graph
+      return {txt:p["3"].inputs.text,
+        cfg:`${p["5"].inputs.width}×${p["5"].inputs.height} · ${p["6"].inputs.steps}st`};
+    throw 0;
   }catch(err){ return {txt:"(external job)",cfg:""}; }
 }
 async function pollQueue(){
@@ -632,7 +751,8 @@ $("btnClearQ").onclick=async()=>{
 async function submit(item){
   const r=await fetch(`${COMFY}/prompt`,{method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({prompt:buildPrompt(item),client_id:CLIENT_ID})});
+    body:JSON.stringify({prompt:(MODE==="image"?buildImagePrompt(item):buildPrompt(item)),
+      client_id:CLIENT_ID})});
   if(!r.ok){const t=await r.text();
     throw new Error(`ComfyUI rejected the job (${r.status}). ${t.slice(0,300)}`);}
   const j=await r.json(); myIds.add(j.prompt_id); return j.prompt_id;
@@ -650,14 +770,23 @@ async function runClip(i){
   catch(e){ log("ERROR: "+esc(e.message),"e"); nextClip(); }
 }
 async function clipFinished(){
-  setStage(STAGES.length-1);
-  if(stageStart) stageTimes[STAGES[stageIdx].id]=(performance.now()-stageStart)/1000;
-  stageIdx=STAGES.length; stageStart=0; renderStages();
+  const SS=stagesFor();
+  setStage(SS.length-1);
+  if(stageStart) stageTimes[SS[stageIdx].id]=(performance.now()-stageStart)/1000;
+  stageIdx=SS.length; stageStart=0; renderStages();
   $("wrapIndet").classList.add("hidden"); $("wrapDet").classList.remove("hidden");
   const secs=(performance.now()-clipStart)/1000;
   doneCount++; $("stDone").textContent=doneCount; $("stPer").textContent=fmt(secs);
   log(`Clip ${qi+1} finished in <b>${fmt(secs)}</b>`,"g");
-  if(secPerStep>0){
+  if(secPerStep>0 && MODE==="image"){
+    const mpx=(queue[qi].w*queue[qi].h)/1e6;
+    const a=icalib.measured?0.35:1.0;
+    const decObs=Math.max(0,secs-secPerStep*curSteps);
+    icalib.stepPerMPx=icalib.measured?icalib.stepPerMPx*(1-a)+(secPerStep/mpx)*a
+                                     :secPerStep/mpx;
+    icalib.decPerMPx=icalib.measured?icalib.decPerMPx*(1-a)+(decObs/mpx)*a:decObs/mpx;
+    icalib.measured=true; saveICalib(icalib);
+  } else if(secPerStep>0){
     const a=calib.measured?0.35:1.0;
     const decObs=Math.max(0,secs-secPerStep*curSteps);
     calib.stepPerMTok=calib.measured?calib.stepPerMTok*(1-a)+(secPerStep/curTokensM)*a
@@ -690,13 +819,19 @@ function nextClip(){
 function finish(){
   running=false;
   const total=(performance.now()-batchStart)/1000;
-  $("doneTitle").textContent=`${finished.length} clip${finished.length===1?"":"s"} in ${fmt(total)}`;
+  const w=MODE==="image"?"image":"clip";
+  $("doneTitle").textContent=`${finished.length} ${w}${finished.length===1?"":"s"} in ${fmt(total)}`;
   $("doneSub").textContent=doneCount
-    ? `Average ${fmt(total/Math.max(1,doneCount))} per clip. Estimates now calibrated to this PC.`
+    ? `Average ${fmt(total/Math.max(1,doneCount))} per ${w}. Estimates now calibrated to this PC.`
     : "Nothing completed — check the log above.";
   const g=$("results"); g.innerHTML="";
   finished.forEach(f=>{const d=document.createElement("div"); d.className="res";
-    d.innerHTML=`<video src="${f.url}" controls loop muted playsinline preload="metadata"></video>
+    const isImg=/\.(png|jpe?g|webp)$/i.test(f.name);
+    d.innerHTML=`${isImg
+        ? `<a href="${f.url}" target="_blank" rel="noopener"><img src="${f.url}"
+             style="width:100%;display:block;background:#000;aspect-ratio:9/16;object-fit:cover"
+             alt="${esc(f.prompt).slice(0,80)}"></a>`
+        : `<video src="${f.url}" controls loop muted playsinline preload="metadata"></video>`}
       <div class="meta"><div class="p" title="${esc(f.prompt)}">${esc(f.prompt)}</div>
       <div class="mono" style="font-size:11px">${esc(f.name)}</div></div>`;
     g.appendChild(d);});
@@ -704,23 +839,61 @@ function finish(){
 }
 
 // ---------- estimate ----------
-function currentCfg(){const [w,h]=$("selRes").value.split("x").map(Number);
+function currentCfg(){
+  if(MODE==="image"){
+    const [w,h]=$("iRes").value.split("x").map(Number);
+    return {w,h,frames:1,steps:+$("iSteps").value,vars:+$("iVar").value};
+  }
+  const [w,h]=$("selRes").value.split("x").map(Number);
   return {w,h,frames:+$("selFrames").value,steps:+$("selSteps").value,vars:+$("selVar").value};}
 function lines(){ if(mode==="text"){const t=$("txtPrompt").value.trim(); return t?[t]:[];}
   return $("txtScript").value.split("\n").map(s=>s.trim()).filter(s=>s&&!s.startsWith("#")); }
 function refreshEstimate(){
-  const c=currentCfg(), n=lines().length*c.vars, mt=tokensOf(c.w,c.h,c.frames)/1e6;
-  $("costNote").innerHTML=`${(mt*1000).toFixed(1)}k tokens per clip. `
-    +`Frames cost far more than pixels — 17 frames is roughly a third the cost of 33.`;
+  const c=currentCfg(), n=lines().length*c.vars;
+  const word=MODE==="image"?"image":"clip";
+  if(MODE!=="image"){
+    const mt=tokensOf(c.w,c.h,c.frames)/1e6;
+    $("costNote").innerHTML=`${(mt*1000).toFixed(1)}k tokens per clip. `
+      +`Frames cost far more than pixels — 17 frames is roughly a third the cost of 33.`;
+  }
   if(!n){ $("estTotal").textContent="—"; $("btnStart").textContent="Start generating"; return; }
-  const t=estimateClip(c.w,c.h,c.frames,c.steps,true)
-        +(n-1)*estimateClip(c.w,c.h,c.frames,c.steps,false);
-  $("estTotal").innerHTML=fmt(t)+(calib.measured?""
+  const ck=MODE==="image"?icalib:calib;
+  const one=(withLoad)=>MODE==="image"
+      ? (c.steps*ck.stepPerMPx*(c.w*c.h/1e6) + ck.decPerMPx*(c.w*c.h/1e6)
+         + (withLoad?ck.loadSec:0))
+      : estimateClip(c.w,c.h,c.frames,c.steps,withLoad);
+  const t=one(true)+(n-1)*one(false);
+  $("estTotal").innerHTML=fmt(t)+(ck.measured?""
     :` <span style="font-size:12px;color:var(--warn);font-weight:400">rough</span>`);
-  $("btnStart").textContent=`Start generating — ${n} clip${n===1?"":"s"}`;
+  $("btnStart").textContent=`Start generating — ${n} ${word}${n===1?"":"s"}`;
 }
 
 // ---------- wiring ----------
+function applyMode(m){
+  MODE=m;
+  try{ localStorage.setItem("ovg_mode",m); }catch(e){}
+  $("setImage").classList.toggle("hidden",m!=="image");
+  $("setVideo").classList.toggle("hidden",m==="image");
+  $("setupMode").textContent=m;
+  $("idleMode").textContent=(m==="image"?"Image":"Video")+" mode";
+  document.querySelectorAll("header .sub")[0].textContent =
+    m==="image" ? "SDXL Lightning · 9:16 stills" : "Wan 2.1 1.3B · 9:16 Shorts";
+  const ck=m==="image"?icalib:calib;
+  $("calibNote").innerHTML=ck.measured
+    ? `Calibrated: about <b>${fmt(m==="image"
+        ? ck.stepPerMPx*4*0.92+ck.decPerMPx*0.92
+        : estimateClip(432,768,33,4,false))}</b> per ${m==="image"?"image":"2-second clip"}.`
+    : `Not calibrated yet — your first run measures this PC.`;
+}
+async function pickMode(m){
+  applyMode(m);
+  const d=await pollHelper();
+  if(d && !d.all_present) show("scSetup"); else show("scIdle");
+}
+document.querySelectorAll("[data-pick]").forEach(el=>
+  el.onclick=()=>pickMode(el.dataset.pick));
+$("btnSwitchMode").onclick=()=>show("scHome");
+$("btnSetupBack").onclick=()=>show("scHome");
 $("btnGenerate").onclick=()=>{show("scInput");refreshEstimate();};
 $("btnBack").onclick=()=>show("scIdle");
 $("btnAgain").onclick=()=>{show("scInput");refreshEstimate();};
@@ -731,7 +904,8 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   $("paneText").classList.toggle("hidden",mode!=="text");
   $("paneScript").classList.toggle("hidden",mode!=="script");
   refreshEstimate();});
-["selRes","selFrames","selSteps","selVar"].forEach(id=>$(id).onchange=refreshEstimate);
+["selRes","selFrames","selSteps","selVar","iRes","iSteps","iVar"]
+  .forEach(id=>{const e=$(id); if(e) e.onchange=refreshEstimate;});
 $("txtPrompt").oninput=refreshEstimate; $("txtScript").oninput=refreshEstimate;
 $("btnCopyPath").onclick=()=>navigator.clipboard.writeText(outputDir||"")
   .then(()=>{$("btnCopyPath").textContent="Copied";
@@ -754,11 +928,11 @@ $("btnStop").onclick=()=>{stopAfter=true;log("Will stop after the current clip f
 
 // ---------- boot ----------
 (async function boot(){
-  const d=await pollHelper();
-  if(d && !d.all_present){ show("scSetup"); } else { setupDone=true; show("scIdle"); }
-  $("calibNote").innerHTML=calib.measured
-    ? `Calibrated: about <b>${fmt(estimateClip(432,768,33,4,false))}</b> per 2-second clip at default settings.`
-    : `Not calibrated yet — your first run measures this PC, and estimates become accurate after it.`;
+  let last="video";
+  try{ last=localStorage.getItem("ovg_mode")||"video"; }catch(e){}
+  applyMode(last);
+  show("scHome");                 // always start on the picker
+  await pollHelper();             // fills in the ready/needs-download tags
   setConn("","ComfyUI…"); connect();
   pollQueue(); setInterval(pollQueue,2000);
   setInterval(pollHelper,1200);

@@ -1,15 +1,36 @@
 # OWN Video Generator
 
-Local, free AI video generation for YouTube Shorts on a **GTX 1650 4 GB / i5-8600K / 32 GB**.
+Local, free AI **video and image** generation for YouTube Shorts.
+Runs on **Windows and macOS**, entirely in your browser via ComfyUI.
+No cloud, no subscription, no watermark, no upload of your prompts.
 
-Runs entirely in your browser via ComfyUI. No cloud, no subscription, no watermark,
-no upload of your prompts.
+```
+Windows :  run.bat
+macOS   :  ./run.sh
+```
+
+One launcher detects your hardware and tunes ComfyUI to it. Pick **Video** or
+**Image** on the home screen; each downloads its own models the first time you
+use it, with live progress. Nothing but code is in this repo — no weights.
+
+## The two modes
+
+| | Video | Image |
+|---|---|---|
+| Model | Wan 2.1 T2V 1.3B | SDXL + Lightning 4-step LoRA |
+| Output | 432×768, 33 frames, 16 fps (2.1 s) | 720×1280 still |
+| Delivered | 1080×1920 @ 32 fps MP4 | 1080×1920 PNG |
+| Download | 7.3 GB | 7.7 GB |
+| Time on a GTX 1650 | ~5 min per clip | well under a minute |
+
+Both are exact 9:16 — no cropping on upload.
 
 ## The stack
 
 | Layer | Choice | Why |
 |---|---|---|
-| Model | **Wan 2.1 T2V 1.3B** (FP16, 2.84 GB) | Best video model that genuinely fits in 4 GB |
+| Video model | **Wan 2.1 T2V 1.3B** (FP16, 2.84 GB) | Best video model that genuinely fits in 4 GB |
+| Image model | **SDXL + Lightning LoRA** (7.3 GB) | Everything newer needs >4 GB, and Nunchaku's INT4 kernels need SM80+ |
 | Speed LoRA | **Self-Forcing DMD 1.3B** rank 32 | 4 steps instead of 30 — the difference between 5 min and 45 min |
 | Text encoder | **UMT5-XXL Q5_K_M GGUF** on the **CPU** | 4.15 GB instead of 11 GB, and costs 0 VRAM |
 | UI | **ComfyUI portable** → `127.0.0.1:8188` | Browser-based, embedded Python, nothing else to install |
@@ -26,11 +47,13 @@ Exact 9:16, no crop, ready to upload.
 
 0. **[docs/MODEL_CHOICE.md](docs/MODEL_CHOICE.md)** — why this model and not Wan 2.2,
    LTX-2.3 or CogVideoX, measured against real file sizes.
-1. **[docs/SETUP.md](docs/SETUP.md)** — installation, step by step.
+1. **[docs/CROSS_PLATFORM.md](docs/CROSS_PLATFORM.md)** — running on Windows vs macOS,
+   what the launcher tunes automatically, and installing ComfyUI on a Mac.
+2. **[docs/SETUP.md](docs/SETUP.md)** — Windows installation, step by step.
    Steps 1–3 are the anti-crash configuration. Do not skip them.
-2. **[docs/TUNING.md](docs/TUNING.md)** — every setting explained, the up/down tuning
+3. **[docs/TUNING.md](docs/TUNING.md)** — every setting explained, the up/down tuning
    ladder, honest speed and quality expectations, troubleshooting table.
-3. **[prompts/prompt_pack.md](prompts/prompt_pack.md)** — prompts written around what
+4. **[prompts/prompt_pack.md](prompts/prompt_pack.md)** — prompts written around what
    this model is actually good at.
 
 ## The UI

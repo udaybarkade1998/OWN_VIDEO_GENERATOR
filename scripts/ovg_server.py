@@ -19,13 +19,18 @@ import os
 import socketserver
 import threading
 import time
+import platform
 import urllib.request
 from pathlib import Path
+
+PLATFORM = platform.system()
 
 # ---------------------------------------------------------------- model list
 
 HF = "https://huggingface.co"
-MODELS = [
+
+# Models are grouped by mode so the UI can download only what that mode needs.
+VIDEO_MODELS = [
     {
         "key": "unet",
         "name": "wan2.1_t2v_1.3B_fp16.safetensors",
@@ -72,6 +77,41 @@ MODELS = [
     },
 ]
 
+IMAGE_MODELS = [
+    {
+        "key": "sdxl",
+        "name": "sd_xl_base_1.0.safetensors",
+        "subdir": "checkpoints",
+        "size": 6938040706,
+        "what": "SDXL base 1.0 - image model (includes its text encoders)",
+        "url": f"{HF}/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/"
+               "sd_xl_base_1.0.safetensors",
+    },
+    {
+        "key": "sdxl_lightning",
+        "name": "sdxl_lightning_4step_lora.safetensors",
+        "subdir": "loras",
+        "size": 393854592,
+        "what": "SDXL-Lightning 4-step LoRA - 4 steps instead of 30",
+        "url": f"{HF}/ByteDance/SDXL-Lightning/resolve/main/"
+               "sdxl_lightning_4step_lora.safetensors",
+    },
+    {
+        "key": "sdxl_vae",
+        "name": "sdxl_vae.safetensors",
+        "subdir": "vae",
+        "size": 334641162,
+        "what": "SDXL VAE (fp16-fix build)",
+        "url": f"{HF}/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl_vae.safetensors",
+    },
+]
+
+MODEL_SETS = {"video": VIDEO_MODELS, "image": IMAGE_MODELS}
+
+
+def models_for(mode):
+    return MODEL_SETS.get(mode, VIDEO_MODELS)
+
 COMFY_ROOT = None
 UI_DIR = None
 
@@ -84,6 +124,7 @@ STATE = {
     "error": None,
     "files": {},     # key -> {got, total, speed}
     "started": 0,
+    "mode": None,
 }
 LOCK = threading.Lock()
 
@@ -159,9 +200,9 @@ def download_one(m):
         STATE["done_keys"].append(key)
 
 
-def download_all():
+def download_all(mode):
     try:
-        for m in MODELS:
+        for m in models_for(mode):
             if have(m):
                 with LOCK:
                     if m["key"] not in STATE["done_keys"]:
@@ -199,8 +240,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.startswith("/api/status"):
+            from urllib.parse import urlparse, parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            mode = (qs.get("mode") or ["video"])[0]
+            if mode not in MODEL_SETS:
+                mode = "video"
             models = []
-            for m in MODELS:
+            for m in models_for(mode):
                 p = target_path(m)
                 models.append({
                     "key": m["key"], "name": m["name"], "what": m["what"],
@@ -210,25 +256,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 })
             with LOCK:
                 st = json.loads(json.dumps(STATE))
+            ready = {k: all(have(x) for x in v) for k, v in MODEL_SETS.items()}
             return self._json({
                 "comfy_root": str(COMFY_ROOT),
                 "output_dir": str(Path(COMFY_ROOT) / "output"),
+                "mode": mode,
                 "models": models,
                 "all_present": all(m["have"] for m in models),
                 "missing_bytes": sum(m["size"] for m in models if not m["have"]),
+                "ready": ready,
+                "sizes": {k: sum(x["size"] for x in v) for k, v in MODEL_SETS.items()},
+                "platform": PLATFORM,
                 "download": st,
             })
         return super().do_GET()
 
     def do_POST(self):
         if self.path.startswith("/api/download"):
+            from urllib.parse import urlparse, parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            mode = (qs.get("mode") or ["video"])[0]
+            if mode not in MODEL_SETS:
+                mode = "video"
             with LOCK:
                 if STATE["active"]:
                     return self._json({"ok": False, "reason": "already running"}, 409)
                 STATE.update(active=True, error=None, done_keys=[],
-                             files={}, started=time.time())
-            threading.Thread(target=download_all, daemon=True).start()
-            return self._json({"ok": True})
+                             files={}, started=time.time(), mode=mode)
+            threading.Thread(target=download_all, args=(mode,), daemon=True).start()
+            return self._json({"ok": True, "mode": mode})
         return self._json({"error": "not found"}, 404)
 
     def do_OPTIONS(self):
@@ -263,9 +319,10 @@ def main():
     print(f"UI          : http://127.0.0.1:{args.port}")
     print(f"ComfyUI root: {COMFY_ROOT}")
     print(f"Clips saved : {COMFY_ROOT / 'output'}")
-    missing = [m["name"] for m in MODELS if not have(m)]
-    print(f"Models      : {len(MODELS)-len(missing)}/{len(MODELS)} present"
-          + (f" - missing {len(missing)}" if missing else ""))
+    for mode, ms in MODEL_SETS.items():
+        ok = sum(1 for m in ms if have(m))
+        tot_gb = sum(m["size"] for m in ms) / 1e9
+        print(f"{mode:<12}: {ok}/{len(ms)} models present ({tot_gb:.1f} GB total)")
     with Server(("127.0.0.1", args.port), Handler) as httpd:
         httpd.serve_forever()
 

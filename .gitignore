@@ -14,3 +14,6 @@ ComfyUI_windows_portable/
 # Python build artifacts
 __pycache__/
 *.py[cod]
+
+# launcher config (machine-specific)
+ovg_config.json
