@@ -173,7 +173,7 @@ it is how the 2-second limit stops being a limit.
 | `no kernel image is available` | Wrong CUDA build — get the `_cu126` portable asset. |
 | Red node: `CLIPLoaderGGUF` | ComfyUI-GGUF not installed. SETUP step 5. |
 | Node says model not found | File in the wrong folder. Check the table in SETUP step 6, then **Refresh** in the UI. |
-| Output is black or solid green | VAE precision. Change `--fp16-vae` to `--fp32-vae` in the .bat. |
+| **Only the first frame renders, rest are blank/identical** | **`--fp16-vae`. Use `--fp32-vae`.** Wan's VAE decodes causally in time; fp16 overflows after frame 1 and every later frame collapses to a constant. ComfyUI still reports `success` - the graph ran, the pixels are just wrong. Verify with: extract frames and count unique ones. |
 | Output is static, barely moves | Raise shift to 8.0; add explicit camera motion to the prompt. |
 | Output is a flickering mess | Steps too low or resolution too low. Steps → 6, confirm width ≥ 432. |
 | Whole PC freezes during a run | Pagefile too small (SETUP step 3), or `RESERVE` too low. |
