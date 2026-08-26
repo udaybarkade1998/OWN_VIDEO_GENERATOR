@@ -24,6 +24,8 @@ Exact 9:16, no crop, ready to upload.
 
 ## Start here
 
+0. **[docs/MODEL_CHOICE.md](docs/MODEL_CHOICE.md)** — why this model and not Wan 2.2,
+   LTX-2.3 or CogVideoX, measured against real file sizes.
 1. **[docs/SETUP.md](docs/SETUP.md)** — installation, step by step.
    Steps 1–3 are the anti-crash configuration. Do not skip them.
 2. **[docs/TUNING.md](docs/TUNING.md)** — every setting explained, the up/down tuning
@@ -64,6 +66,18 @@ scripts\finish_short.bat "D:\ComfyUI\...\output\short_00001.webm"
   on the music beat makes short clips read as deliberate editing rather than a limit.
 
 Full detail in [docs/TUNING.md](docs/TUNING.md).
+
+## Why this model and not a newer one
+
+Open video models moved upmarket during 2025–2026. Everything current — LTX-2.5/2.3
+(22B), Wan 2.2 14B, LTX 0.9.8 (13B) — targets 12–32 GB cards and will not run here.
+
+Wan 2.1 1.3B is **the only model in its class you can run at full FP16 precision on
+4 GB**. The nearest alternative, Wan 2.2 TI2V-5B, needs Q4 quantization *and* ships a
+1.41 GB VAE against Wan 2.1's 0.25 GB — a 5.6× tax on the exact budget you cannot
+afford, in exchange for parameters that quantization has already damaged.
+
+Evidence and the full comparison: [docs/MODEL_CHOICE.md](docs/MODEL_CHOICE.md).
 
 ## Hardware notes specific to this PC
 
